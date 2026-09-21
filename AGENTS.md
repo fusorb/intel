@@ -3,9 +3,16 @@
 ## Overview
 
 `fusorb/intel` ingests every active Fusorb product repo into a PostgreSQL knowledge graph.
-The graph uses five entity types (Repository, Package, Module, Symbol, Document) plus a
-polymorphic Relationship join table. Every row carries full provenance
+The graph uses six entity types (Repository, Package, Module, Symbol, Document, Decision)
+plus a polymorphic Relationship join table. Every row carries full provenance
 (sourcePath, sourceCommitSha, retrievedAt, evidenceLevel).
+
+The `Decision` entity captures architectural rules and invariants (e.g. "Facet is the single
+mandatory UI system across the ecosystem"). Unlike the other five, `Decision` rows are **not**
+extracted by ingestion — they are written by a human (or an agent with review). Their
+`sourceType` will almost always be `human_statement`, since they typically originate from
+conversation or judgment rather than from a file. Relationship kinds `GOVERNS` and `VIOLATES`
+link Decisions to the entities they govern and the entities that currently violate them.
 
 ## Tech stack
 
@@ -63,8 +70,9 @@ pnpm prisma:push
   `retrievedAt`, and `evidenceLevel`. This is not optional metadata.
 - **Evidence levels** — use `EvidenceLevel.Verified` for data read directly from files,
   `EvidenceLevel.Inferred` for derived/inferred facts, `EvidenceLevel.Unknown` for unassessed.
-- **No speculative entities** — the schema has exactly five entity types. Don't add more
-  unless the verification step proves they're needed.
+- **No speculative entities** — the schema has exactly six entity types (Repository, Package,
+  Module, Symbol, Document, Decision). Don't add more unless the verification step proves
+  they're needed.
 - **Don't build the answering layer yet** — Session 2 covers retrieval/provider/tools/API.
   Focus on ingestion being correct and the graph schema being sound.
 

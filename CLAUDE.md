@@ -10,8 +10,12 @@ This repo is **Tier-1 infra**. It is not a product that ships to end users.
 
 ## Current scope (Session 1)
 
-- **Graph**: Prisma schema (`schemas/graph.prisma`) — five entity types (Repository, Package,
-  Module, Symbol, Document) + a polymorphic Relationship join table. Provenance on every row.
+- **Graph**: Prisma schema (`schemas/graph.prisma`) — six entity types (Repository, Package,
+  Module, Symbol, Document, Decision) + a polymorphic Relationship join table with
+  `CONTAINS`, `CONSUMES`, `DEPENDS_ON`, `RENAMED_FROM`, `DOCUMENTS`, `EXPORTS`, `DEFINES`,
+  `REFERENCES`, `GOVERNS`, and `VIOLATES` edge kinds. Provenance on every row. `Decision`
+  entities hold architectural rules/invariants and are written by humans/agents (not
+  ingested), with `sourceType` almost always `human_statement`.
 - **Evidence**: `packages/evidence` — the `EvidenceLevel` enum (verified / strongly_supported /
   inferred / unknown) + helpers for attaching provenance.
 - **Ingest**: `packages/ingest` — clones a repo via git, walks the file tree, extracts entities,
@@ -49,7 +53,7 @@ pnpm verify
 
 | Path | Purpose |
 |------|---------|
-| `schemas/graph.prisma` | Canonical Prisma schema — five entities + Relationship |
+| `schemas/graph.prisma` | Canonical Prisma schema — six entities + Relationship |
 | `packages/evidence/src/index.ts` | `EvidenceLevel` enum + provenance helpers |
 | `packages/graph/src/index.ts` | PrismaClient singleton + re-exports |
 | `packages/ingest/src/` | Ingestion library (`index.ts`) + CLI (`cli.ts`) |
@@ -67,6 +71,7 @@ pnpm verify
          │                      │  Module         │     │
          │ uses                 │  Symbol         │     │
          ▼                      │  Document       │     │
+         │                      │  Decision       │     │
 ┌────────────────┐            │  Relationship ──┘     │
 │     graph      │            │  (polymorphic join)   │
 │ (Prisma client)│───────────►│  + provenance         │
