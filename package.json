@@ -1,0 +1,36 @@
+{
+  "name": "@fusorb/intel",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Fusorb knowledge graph: ingestion, graph schema, and evidence provenance.",
+  "type": "module",
+  "packageManager": "pnpm@12.4.0",
+  "engines": {
+    "node": ">=22",
+    "pnpm": ">=9"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "typecheck:output": "pnpm typecheck > .agent/typecheck-output.txt 2>&1",
+    "build": "pnpm -r build",
+    "prisma:generate": "prisma generate",
+    "prisma:push": "prisma db push",
+    "prisma:studio": "prisma studio",
+    "ingest": "tsx --env-file=.env packages/ingest/src/cli.ts",
+    "ingest:all": "pnpm ingest https://github.com/fusorb/facet.git && pnpm ingest https://github.com/fusorb/sovgrant.git && pnpm ingest https://github.com/fusorb/relnex.git && pnpm ingest https://github.com/fusorb/sovport.git",
+    "verify": "tsx --env-file=.env scripts/verify.ts",
+    "postinstall": "node scripts/postinstall.cjs"
+  },
+  "devDependencies": {
+    "@prisma/client": "^7.9.1",
+    "@prisma/adapter-pg": "^7.9.1",
+    "pg": "^8.23.0",
+    "@types/node": "^22",
+    "@types/pg": "^8.21.0",
+    "commander": "^12.1.0",
+    "prisma": "^7.9.1",
+    "tsx": "^4.23.12",
+    "tsup": "^8.5.1",
+    "typescript": "^5.9.3"
+  }
+}

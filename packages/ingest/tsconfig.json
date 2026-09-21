@@ -1,0 +1,11 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    "paths": {
+      "@fusorb/intel-evidence": ["../evidence/src/index.ts"],
+      "@fusorb/intel-graph": ["../graph/src/index.ts"]
+    }
+  },
+  "include": ["src"]
+}

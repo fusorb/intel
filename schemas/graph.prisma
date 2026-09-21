@@ -1,0 +1,218 @@
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x"] // add every target your CI/deploy
+                                                          // image actually uses (Alpine, etc.)
+}
+
+// As of Prisma 6.18+ (and required outright on Prisma 7), the connection
+// string does NOT live here — `url = env("DATABASE_URL")` in this block is
+// deprecated on 6.18+ and a hard schema-validation error on 7
+// ("the datasource property url is no longer supported in schema files").
+// It now lives in prisma.config.ts (see that file, alongside this one).
+// This block only declares the provider.
+datasource db {
+  provider = "postgresql"
+}
+
+/// How confident we are in a fact, independent of how it was obtained.
+enum EvidenceLevel {
+  verified
+  strongly_supported
+  inferred
+  unknown
+}
+
+/// HOW a fact was obtained — orthogonal to EvidenceLevel (confidence).
+/// A human_statement can be `verified` (the architect said it plainly) while
+/// still not being extractable from any ingested file — this is exactly the
+/// npm-namespace-blocker case from the recon work: real, confirmed, but with
+/// no file to point `sourcePath` at.
+enum SourceType {
+  file
+  commit
+  human_statement
+  inferred_pattern
+}
+
+enum EntityType {
+  REPOSITORY
+  PACKAGE
+  MODULE
+  SYMBOL
+  DOCUMENT
+  DECISION
+}
+
+enum RelationshipKind {
+  CONTAINS        /// Repository contains Package/Module/Document
+  CONSUMES        /// Package A depends on Package B — synthesized from
+                   /// package.json dependencies at ingest time, not left
+                   /// as an opaque JSON blob
+  DEPENDS_ON      /// Module/Symbol depends on another
+  RENAMED_FROM    /// Entity renamed from another (Arc→current-name lineage)
+  DOCUMENTS       /// Document describes another entity
+  EXPORTS         /// Module exports a Symbol
+  DEFINES         /// Module/Symbol defines a Symbol
+  REFERENCES      /// Symbol references another Symbol
+  GOVERNS         /// Decision governs a Repository/Package/Module
+  VIOLATES        /// Entity currently violates a Decision (e.g. Relnex
+                   /// VIOLATES the "Facet is the only UI system" Decision)
+}
+
+/// Shared provenance fields — every fact-bearing model repeats this shape
+/// rather than inheriting it (Prisma has no mixins), but keep the field
+/// names identical everywhere so query code can treat them uniformly.
+
+model Repository {
+  id              String        @id @default(cuid())
+  name            String        @unique
+  url             String?
+  defaultBranch   String?
+
+  packages    Package[]
+  modules     Module[]
+  documents   Document[]
+  symbols     Symbol[]
+
+  sourcePath      String        @default(".")
+  sourceType      SourceType    @default(file)
+  sourceCommitSha String?
+  firstSeenAt     DateTime      @default(now())
+  retrievedAt     DateTime      @default(now())
+  removedAt       DateTime?     // set (not hard-deleted) when a re-ingest no longer finds this
+  evidenceLevel   EvidenceLevel @default(verified)
+}
+
+model Package {
+  id              String        @id @default(cuid())
+  name            String
+  version         String?
+  description     String?
+
+  repositoryId    String
+  repository      Repository    @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+
+  // Raw manifest data — kept for completeness/debugging, but NOT the source
+  // of truth for cross-package queries. Ingestion must also synthesize
+  // CONSUMES Relationship rows from these at ingest time (see note below).
+  dependencies    Json?
+  devDependencies Json?
+
+  sourcePath      String          // path to package.json relative to repo root
+  sourceType      SourceType    @default(file)
+  sourceCommitSha String
+  firstSeenAt     DateTime      @default(now())
+  retrievedAt     DateTime      @default(now())
+  removedAt       DateTime?
+  evidenceLevel   EvidenceLevel @default(verified)
+
+  @@unique([repositoryId, name])
+  @@index([name]) // "find this package name across every repo" is a core query
+}
+
+model Module {
+  id              String        @id @default(cuid())
+  name            String
+  path            String
+  description     String?
+
+  repositoryId    String
+  repository      Repository    @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+
+  sourcePath      String
+  sourceType      SourceType    @default(file)
+  sourceCommitSha String
+  firstSeenAt     DateTime      @default(now())
+  retrievedAt     DateTime      @default(now())
+  removedAt       DateTime?
+  evidenceLevel   EvidenceLevel @default(verified)
+
+  @@unique([repositoryId, path])
+}
+
+model Symbol {
+  id              String        @id @default(cuid())
+  name            String
+  path            String          // "src/module/file.ts:42" — out of scope for
+                                   // ingestion this session; table exists, stays empty
+  kind            String?
+
+  repositoryId    String
+  repository      Repository    @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+
+  sourcePath      String
+  sourceType      SourceType    @default(file)
+  sourceCommitSha String
+  firstSeenAt     DateTime      @default(now())
+  retrievedAt     DateTime      @default(now())
+  removedAt       DateTime?
+  evidenceLevel   EvidenceLevel @default(inferred) // AST extraction is a step removed
+                                                    // from "read the file directly"
+
+  @@unique([repositoryId, path, name])
+}
+
+model Document {
+  id              String        @id @default(cuid())
+  title           String?
+  path            String
+  description     String?
+
+  repositoryId    String
+  repository      Repository    @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+
+  sourcePath      String
+  sourceType      SourceType    @default(file)
+  sourceCommitSha String
+  firstSeenAt     DateTime      @default(now())
+  retrievedAt     DateTime      @default(now())
+  removedAt       DateTime?
+  evidenceLevel   EvidenceLevel @default(verified)
+
+  @@unique([repositoryId, path])
+}
+
+/// A recorded rule, invariant, or architectural decision — e.g. "Facet is the
+/// single mandatory UI system across the ecosystem." Not extracted by the
+/// ingestion pipeline; these are written (by a human, or later by an agent
+/// with review) because they usually come from conversation or judgment, not
+/// from a file. sourceType will almost always be `human_statement` here.
+model Decision {
+  id              String        @id @default(cuid())
+  title           String
+  statement       String        // the rule itself, in plain language
+  status          String        @default("active") // active | superseded | deferred
+
+  sourcePath      String?       // if it *was* written down somewhere (an ADR doc), point to it
+  sourceType      SourceType    @default(human_statement)
+  sourceCommitSha String?
+  firstSeenAt     DateTime      @default(now())
+  retrievedAt     DateTime      @default(now())
+  evidenceLevel   EvidenceLevel @default(verified)
+}
+
+model Relationship {
+  id              String        @id @default(cuid())
+  fromEntityId    String
+  toEntityId      String
+  fromEntityType  EntityType
+  toEntityType    EntityType
+  kind            RelationshipKind
+
+  // Optional context — e.g. for a CONSUMES edge, the declared semver range;
+  // for a VIOLATES edge, a short note on what specifically is violated.
+  note            String?
+
+  sourcePath      String
+  sourceType      SourceType    @default(file)
+  sourceCommitSha String?
+  firstSeenAt     DateTime      @default(now())
+  retrievedAt     DateTime      @default(now())
+  removedAt       DateTime?
+  evidenceLevel   EvidenceLevel @default(verified)
+
+  @@index([fromEntityId, fromEntityType])
+  @@index([toEntityId, toEntityType])
+  @@index([kind])
+  @@unique([fromEntityId, toEntityId, fromEntityType, toEntityType, kind])
+}
