@@ -63,8 +63,6 @@ describe("Acceptance Suite", () => {
       select: { id: true, repository: { select: { name: true } } },
     })
     expect(facetPackages.length).toBeGreaterThan(0)
-    const facetRepoNames = [...new Set(facetPackages.map((p) => p.repository.name))]
-
     const facetPackageIds = facetPackages.map((p) => p.id)
     const consumers = await prisma.relationship.findMany({
       where: {
@@ -132,6 +130,7 @@ describe("Acceptance Suite", () => {
     const consumes = result.relationships.filter((r) => r.kind === "CONSUMES")
     const firstEdge = consumes[0]
     expect(firstEdge).toBeDefined()
+    if (!firstEdge) throw new Error("Expected at least one CONSUMES relationship")
     expect(firstEdge.provenance.retrievedAt).toBeDefined()
   })
 
