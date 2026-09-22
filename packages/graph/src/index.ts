@@ -27,15 +27,28 @@ function buildClient(pool: Pool): PrismaClient {
   return new PrismaClient({ adapter })
 }
 
-export const prisma: PrismaClient = globalForPrisma.prisma ?? buildClient(buildPool())
+let _prisma: PrismaClient | undefined = globalForPrisma.prisma
 
-if (process.env.NODE_ENV !== "production") {
-  globalForPrisma.prisma = prisma
-}
+// Lazy singleton — connects to PostgreSQL only on first property access.
+// Allows importing @fusorb/intel-graph (and transitively retrieval) without
+// a running database, e.g. for unit tests of pure logic.
+export const prisma = new Proxy({} as PrismaClient, {
+  get(_target, prop: string | symbol) {
+    if (prop === "then" || prop === "toJSON" || prop === Symbol.toPrimitive) {
+      return undefined
+    }
+    if (!_prisma) {
+      _prisma = globalForPrisma.prisma ?? buildClient(buildPool())
+      if (process.env.NODE_ENV !== "production") {
+        globalForPrisma.prisma = _prisma
+      }
+    }
+    return _prisma[prop as keyof PrismaClient]
+  },
+})
 
-// Re-export PrismaClient, the Prisma namespace, and generated enum types
-// for downstream consumers (retrieval, tools, etc.)
-export { PrismaClient, EntityType, RelationshipKind } from "@prisma/client"
+// Re-export generated enum types for downstream consumers (retrieval, tools, etc.)
+export { EntityType, RelationshipKind, DependencyType } from "@prisma/client"
 export type { Prisma } from "@prisma/client"
 
 // Re-export evidence vocabulary so callers can import everything from @fusorb/intel-graph

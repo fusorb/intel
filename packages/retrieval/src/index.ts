@@ -3,16 +3,42 @@ import type { EntityType, RelationshipKind } from "@fusorb/intel-graph"
 
 // --- Constants ---
 
+/**
+ * Stop words for keyword extraction. "fact" and "frontend" are intentionally
+ * NOT in this set — they carry meaning in FUSORB domain questions
+ * ("When was that fact last confirmed?" / "Facet is the single UI system").
+ */
 const STOP_WORDS = new Set([
   "the", "a", "an", "of", "to", "in", "on", "at", "by", "for", "with",
   "and", "or", "but", "if", "then", "when", "where", "how", "what",
   "is", "are", "was", "were", "be", "been", "being", "have", "has",
   "had", "do", "does", "did", "will", "would", "could", "should",
   "this", "that", "these", "those", "it", "its", "them", "they",
-  "import", "frontend", "instead", "fact", "confirmed",
+  "last", "first", "next", "previous", "recent", "earliest",
+  "import", "instead", "currently", "use", "uses",
+  "used", "using", "does", "can", "may", "might", "must", "shall",
+  "not", "no", "nor", "just", "than", "then", "there", "here", "from",
+  "into", "out", "over", "under", "also", "very", "more", "most",
+  "some", "such", "about", "above", "below", "between", "during",
 ])
 
 const MAX_DOCUMENT_CHARS = 4000
+
+/** Evidence-level score multipliers. Verified facts rank first. */
+function evidenceMultiplier(level: string): number {
+  switch (level) {
+    case "verified":
+      return 1.0
+    case "strongly_supported":
+      return 0.8
+    case "inferred":
+      return 0.5
+    case "unknown":
+      return 0.2
+    default:
+      return 0.5
+  }
+}
 
 // --- Types ---
 
@@ -47,6 +73,7 @@ export interface RetrievedRelationship {
   toType: string
   toName: string
   note: string | null
+  depType: string | null
   provenance: ProvenanceInfo
   score: number
 }
@@ -70,6 +97,7 @@ export interface DependencyInfo {
   targetRepository: string | null
   targetIsExternal: boolean
   range: string | null
+  depType: string | null
   provenance: ProvenanceInfo
 }
 
@@ -85,17 +113,18 @@ export interface PackageDependencies {
 /**
  * Extract meaningful keywords from a free-text question.
  * Captures @scope/package tokens and individual word tokens,
- * filtering out common English stop words.
+ * filtering out common English stop words. Preserves domain-relevant
+ * tokens like "facet" and "fact".
  */
 export function extractKeywords(question: string): string[] {
   const pkgPattern = /@[\w.-]+\/[\w.-]+/g
-  const packages = question.match(pkgPattern) ?? []
+  const packages = (question.match(pkgPattern) ?? []).map((p) => p.toLowerCase())
 
   const words = question.toLowerCase().match(/[a-z0-9]+/g) ?? []
 
   const keywords = new Set<string>()
   for (const pkg of packages) {
-    keywords.add(pkg.toLowerCase())
+    keywords.add(pkg)
   }
   for (const word of words) {
     if (word.length > 2 && !STOP_WORDS.has(word)) {
@@ -104,6 +133,24 @@ export function extractKeywords(question: string): string[] {
   }
 
   return Array.from(keywords)
+}
+
+/**
+ * Compute a base score for a match, then multiply by the evidence-level
+ * multiplier so verified facts rank above inferred ones.
+ */
+function scoreFor(evidenceLevel: string, baseScore: number): number {
+  return baseScore * evidenceMultiplier(evidenceLevel)
+}
+
+/** Exact-match score (1.0 base) for names/paths equal to the keyword. */
+function exactScore(evidenceLevel: string): number {
+  return scoreFor(evidenceLevel, 1.0)
+}
+
+/** Substring-match score (0.5 base) for names containing the keyword. */
+function substringScore(evidenceLevel: string): number {
+  return scoreFor(evidenceLevel, 0.5)
 }
 
 // --- Provenance helpers ---
@@ -135,7 +182,17 @@ function formatCommitSha(sha: string | null): string {
 
 function formatProvenance(p: ProvenanceInfo): string {
   const commit = formatCommitSha(p.sourceCommitSha)
-  return `sourcePath="${p.sourcePath}", sourceCommitSha="${commit}", retrievedAt="${p.retrievedAt.toISOString()}", evidenceLevel="${p.evidenceLevel}"`
+  const lines = [
+    `sourcePath="${p.sourcePath}"`,
+    `sourceCommitSha="${commit}"`,
+    `firstSeenAt="${p.firstSeenAt.toISOString()}"`,
+    `retrievedAt="${p.retrievedAt.toISOString()}"`,
+    `evidenceLevel="${p.evidenceLevel}"`,
+  ]
+  if (p.removedAt) {
+    lines.push(`removedAt="${p.removedAt.toISOString()}"`)
+  }
+  return lines.join(", ")
 }
 
 // --- Entity name resolution ---
@@ -218,7 +275,7 @@ function dedupeEntities(entities: RetrievedEntity[]): RetrievedEntity[] {
       seen.set(key, e)
     }
   }
-  return Array.from(seen.values())
+  return Array.from(seen.values()).sort((a, b) => b.score - a.score)
 }
 
 function dedupeRelationships(
@@ -232,7 +289,7 @@ function dedupeRelationships(
       seen.set(key, r)
     }
   }
-  return Array.from(seen.values())
+  return Array.from(seen.values()).sort((a, b) => b.score - a.score)
 }
 
 function dedupeDocuments(documents: RetrievedDocument[]): RetrievedDocument[] {
@@ -244,7 +301,7 @@ function dedupeDocuments(documents: RetrievedDocument[]): RetrievedDocument[] {
       seen.set(key, d)
     }
   }
-  return Array.from(seen.values())
+  return Array.from(seen.values()).sort((a, b) => b.score - a.score)
 }
 
 function mergeResults(target: RetrievalResult, source: RetrievalResult): void {
@@ -253,15 +310,76 @@ function mergeResults(target: RetrievalResult, source: RetrievalResult): void {
   target.documents.push(...source.documents)
 }
 
+// --- Exact-match retrievers ---
+
+/**
+ * Find a package by exact name across all repositories (excluding the
+ * synthetic "npm" external placeholder repo).
+ */
+export async function searchPackage(
+  name: string,
+  includeExternal = false,
+): Promise<RetrievedEntity[]> {
+  const packages = await prisma.package.findMany({
+    where: {
+      name,
+      removedAt: null,
+      ...(includeExternal ? {} : { repository: { name: { not: "npm" } } }),
+    },
+    include: { repository: true },
+  })
+
+  return packages.map((p) => ({
+    entityType: "PACKAGE",
+    id: p.id,
+    name: p.name,
+    path: p.sourcePath,
+    description: p.description,
+    content: null,
+    provenance: extractProvenance(p),
+    score: exactScore(p.evidenceLevel),
+    repositoryName: p.repository.name,
+  }))
+}
+
+/**
+ * Find a repository by exact name.
+ */
+export async function searchRepository(name: string): Promise<RetrievedEntity[]> {
+  const repos = await prisma.repository.findMany({
+    where: { name: { equals: name, mode: "insensitive" } },
+  })
+
+  return repos.map((r) => ({
+    entityType: "REPOSITORY",
+    id: r.id,
+    name: r.name,
+    path: r.name,
+    description: r.url ?? null,
+    content: null,
+    provenance: extractProvenance(r),
+    score: exactScore(r.evidenceLevel),
+  }))
+}
+
 // --- Keyword search ---
+
+export interface SearchOptions {
+  /** Only return results from this repository (by name). */
+  repositoryName?: string
+  /** Only return results from external (npm) packages. */
+  onlyExternal?: boolean
+}
 
 /**
  * Search for entities whose name, description, path, title, or content
- * contains any of the query's keywords. Returns entities with provenance.
+ * contains any of the query's keywords. Falls back to substring matching
+ * after exact name matching. Returns entities sorted by evidence-aware score.
  */
 export async function searchContent(
   query: string,
   limit: number = 20,
+  options: SearchOptions = {},
 ): Promise<RetrievalResult> {
   const keywords = extractKeywords(query)
   if (keywords.length === 0) {
@@ -274,43 +392,25 @@ export async function searchContent(
     documents: [],
   }
 
-  for (const keyword of keywords) {
-    // Search repositories by name and URL
-    const repos = await prisma.repository.findMany({
-      where: {
-        OR: [
-          { name: { contains: keyword, mode: "insensitive" } },
-          { url: { contains: keyword, mode: "insensitive" } },
-        ],
-      },
-      take: limit,
-    })
-    for (const r of repos) {
-      result.entities.push({
-        entityType: "REPOSITORY",
-        id: r.id,
-        name: r.name,
-        path: r.name,
-        description: r.url ?? null,
-        content: null,
-        provenance: extractProvenance(r),
-        score: keyword.length > 5 ? 0.9 : 0.7,
-      })
-    }
+  const repoFilter = options.repositoryName
+    ? { repository: { name: options.repositoryName } }
+    : {}
+  const externalFilter = options.onlyExternal
+    ? { repository: { name: "npm" } }
+    : {}
 
-    // Search packages by name and description
-    const packages = await prisma.package.findMany({
+  for (const keyword of keywords) {
+    // --- Exact package name match first ---
+    const exactPkgs = await prisma.package.findMany({
       where: {
+        name: { equals: keyword },
         removedAt: null,
-        OR: [
-          { name: { contains: keyword, mode: "insensitive" } },
-          { description: { contains: keyword, mode: "insensitive" } },
-        ],
+        ...repoFilter,
+        ...externalFilter,
       },
       include: { repository: true },
-      take: limit,
     })
-    for (const p of packages) {
+    for (const p of exactPkgs) {
       result.entities.push({
         entityType: "PACKAGE",
         id: p.id,
@@ -319,11 +419,81 @@ export async function searchContent(
         description: p.description,
         content: null,
         provenance: extractProvenance(p),
-        score: keyword.length > 5 ? 0.9 : 0.7,
+        score: exactScore(p.evidenceLevel),
       })
     }
 
-    // Search modules by name and path
+    // --- Exact repository name match ---
+    const exactRepos = await prisma.repository.findMany({
+      where: { name: { equals: keyword, mode: "insensitive" } },
+      take: limit,
+    })
+    for (const r of exactRepos) {
+      result.entities.push({
+        entityType: "REPOSITORY",
+        id: r.id,
+        name: r.name,
+        path: r.name,
+        description: r.url ?? null,
+        content: null,
+        provenance: extractProvenance(r),
+        score: exactScore(r.evidenceLevel),
+      })
+    }
+
+    // --- Substring matching for packages (non-exact) ---
+    const subPackages = await prisma.package.findMany({
+      where: {
+        removedAt: null,
+        OR: [
+          { name: { contains: keyword, mode: "insensitive" } },
+          { description: { contains: keyword, mode: "insensitive" } },
+        ],
+        NOT: { name: { equals: keyword } }, // skip exact matches already found
+        ...repoFilter,
+        ...externalFilter,
+      },
+      include: { repository: true },
+      take: limit,
+    })
+    for (const p of subPackages) {
+      result.entities.push({
+        entityType: "PACKAGE",
+        id: p.id,
+        name: p.name,
+        path: p.sourcePath,
+        description: p.description,
+        content: null,
+        provenance: extractProvenance(p),
+        score: substringScore(p.evidenceLevel),
+      })
+    }
+
+    // --- Substring matching for repositories ---
+    const subRepos = await prisma.repository.findMany({
+      where: {
+        OR: [
+          { name: { contains: keyword, mode: "insensitive" } },
+          { url: { contains: keyword, mode: "insensitive" } },
+        ],
+        NOT: { name: { equals: keyword, mode: "insensitive" } },
+      },
+      take: limit,
+    })
+    for (const r of subRepos) {
+      result.entities.push({
+        entityType: "REPOSITORY",
+        id: r.id,
+        name: r.name,
+        path: r.name,
+        description: r.url ?? null,
+        content: null,
+        provenance: extractProvenance(r),
+        score: substringScore(r.evidenceLevel),
+      })
+    }
+
+    // --- Substring matching for modules ---
     const modules = await prisma.module.findMany({
       where: {
         removedAt: null,
@@ -331,6 +501,7 @@ export async function searchContent(
           { name: { contains: keyword, mode: "insensitive" } },
           { path: { contains: keyword, mode: "insensitive" } },
         ],
+        ...repoFilter,
       },
       include: { repository: true },
       take: limit,
@@ -344,11 +515,11 @@ export async function searchContent(
         description: m.description,
         content: null,
         provenance: extractProvenance(m),
-        score: keyword.length > 5 ? 0.8 : 0.6,
+        score: substringScore(m.evidenceLevel),
       })
     }
 
-    // Search documents by title, description, and content
+    // --- Substring matching for documents ---
     const documents = await prisma.document.findMany({
       where: {
         removedAt: null,
@@ -357,6 +528,7 @@ export async function searchContent(
           { description: { contains: keyword, mode: "insensitive" } },
           { content: { contains: keyword, mode: "insensitive" } },
         ],
+        ...repoFilter,
       },
       include: { repository: true },
       take: limit,
@@ -370,18 +542,18 @@ export async function searchContent(
         description: d.description,
         content: d.content,
         provenance: extractProvenance(d),
-        score: keyword.length > 5 ? 0.8 : 0.6,
+        score: substringScore(d.evidenceLevel),
       })
       result.documents.push({
         path: d.path,
         repositoryName: d.repository?.name ?? "unknown",
         content: d.content,
         provenance: extractProvenance(d),
-        score: keyword.length > 5 ? 0.8 : 0.6,
+        score: substringScore(d.evidenceLevel),
       })
     }
 
-    // Search decisions by title and statement
+    // --- Substring matching for decisions ---
     const decisions = await prisma.decision.findMany({
       where: {
         OR: [
@@ -400,13 +572,14 @@ export async function searchContent(
         description: dec.statement,
         content: null,
         provenance: extractProvenance(dec),
-        score: 0.8,
+        score: substringScore(dec.evidenceLevel),
       })
     }
   }
 
   result.entities = dedupeEntities(result.entities)
   result.documents = dedupeDocuments(result.documents)
+  result.relationships = dedupeRelationships(result.relationships)
 
   return result
 }
@@ -456,7 +629,6 @@ export async function getDependencies(
     score: 1.0,
   })
 
-  // Find all packages belonging to this repository
   const packages = await prisma.package.findMany({
     where: { repositoryId: repo.id, removedAt: null },
     include: { repository: true },
@@ -478,7 +650,6 @@ export async function getDependencies(
   const packageIds = packages.map((p) => p.id)
   if (packageIds.length === 0) return result
 
-  // Find all CONSUMES edges from these packages
   const consumesEdges = await prisma.relationship.findMany({
     where: {
       fromEntityType: "PACKAGE",
@@ -490,7 +661,6 @@ export async function getDependencies(
 
   if (consumesEdges.length === 0) return result
 
-  // Resolve source and target package names
   const srcIds = consumesEdges.map((e) => e.fromEntityId)
   const tgtIds = consumesEdges.map((e) => e.toEntityId)
   const nameMap = await resolveEntityNames(
@@ -504,9 +674,7 @@ export async function getDependencies(
     where: { id: { in: tgtIds } },
     include: { repository: true },
   })
-  const targetRepoMap = new Map<string, string>()
   for (const p of targetPackages) {
-    targetRepoMap.set(p.id, p.repository?.name ?? "unknown")
     result.entities.push({
       entityType: "PACKAGE",
       id: p.id,
@@ -530,8 +698,9 @@ export async function getDependencies(
       toType: "PACKAGE",
       toName: nameMap.get(edge.toEntityId) ?? edge.toEntityId,
       note: edge.note,
+      depType: edge.depType,
       provenance: extractProvenance(edge),
-      score: 0.8,
+      score: 0.8 * evidenceMultiplier(edge.evidenceLevel),
     })
   }
 
@@ -541,7 +710,7 @@ export async function getDependencies(
 /**
  * Find the CONSUMES edges for a specific package, identified by
  * repository name + package name. Returns resolved target info
- * (including whether each target is an external npm placeholder).
+ * (including whether each target is an external npm placeholder and the depType).
  */
 export async function getPackageDependencies(
   repositoryName: string,
@@ -584,6 +753,7 @@ export async function getPackageDependencies(
       targetRepository: targetRepo,
       targetIsExternal: isExternal,
       range: edge.note,
+      depType: edge.depType,
       provenance: extractProvenance(edge),
     }
   })
@@ -598,9 +768,11 @@ export async function getPackageDependencies(
 
 /**
  * Find all incoming CONSUMES edges for a package (i.e., what depends on it).
+ * When repositoryName is provided, restricts to packages in that repository.
  */
-async function getDependents(
+export async function getDependents(
   packageName: string,
+  options: { repositoryName?: string } = {},
 ): Promise<RetrievalResult> {
   const result: RetrievalResult = {
     entities: [],
@@ -608,9 +780,24 @@ async function getDependents(
     documents: [],
   }
 
+  const repoWhere = options.repositoryName
+    ? { repository: { name: options.repositoryName } }
+    : {}
+
   const pkg = await prisma.package.findFirst({
-    where: { name: packageName, removedAt: null },
-    select: { id: true, name: true, sourcePath: true, sourceType: true, sourceCommitSha: true, firstSeenAt: true, retrievedAt: true, evidenceLevel: true, removedAt: true, repository: { select: { name: true } } },
+    where: { name: packageName, removedAt: null, ...repoWhere },
+    select: {
+      id: true,
+      name: true,
+      sourcePath: true,
+      sourceType: true,
+      sourceCommitSha: true,
+      firstSeenAt: true,
+      retrievedAt: true,
+      evidenceLevel: true,
+      removedAt: true,
+      repository: { select: { name: true } },
+    },
   })
 
   if (!pkg) return result
@@ -642,6 +829,23 @@ async function getDependents(
     srcIds.map((id) => ({ id, type: "PACKAGE" })),
   )
 
+  const sourcePackages = await prisma.package.findMany({
+    where: { id: { in: srcIds } },
+    include: { repository: true },
+  })
+  for (const p of sourcePackages) {
+    result.entities.push({
+      entityType: "PACKAGE",
+      id: p.id,
+      name: p.name,
+      path: p.sourcePath,
+      description: p.description,
+      content: null,
+      provenance: extractProvenance(p),
+      score: 0.8,
+    })
+  }
+
   for (const edge of edges) {
     result.relationships.push({
       id: edge.id,
@@ -653,15 +857,16 @@ async function getDependents(
       toType: "PACKAGE",
       toName: pkg.name,
       note: edge.note,
+      depType: edge.depType,
       provenance: extractProvenance(edge),
-      score: 0.8,
+      score: 0.8 * evidenceMultiplier(edge.evidenceLevel),
     })
   }
 
   return result
 }
 
-// -- Relationship traversal (bidirectional, for structural questions) --
+// --- Relationship traversal ---
 
 /**
  * Find all relationships connected to a specific entity, optionally
@@ -672,7 +877,9 @@ export async function traverseRelationships(
   entityType: EntityType,
   kinds?: RelationshipKind[],
 ): Promise<RetrievedRelationship[]> {
-  const kindFilter = kinds && kinds.length > 0 ? { in: kinds } : undefined
+  const kindFilter = kinds && kinds.length > 0
+    ? { in: kinds as unknown as RelationshipKind[] }
+    : undefined
 
   const edges = await prisma.relationship.findMany({
     where: {
@@ -705,17 +912,18 @@ export async function traverseRelationships(
       kind: edge.kind,
       fromId: edge.fromEntityId,
       fromType: edge.fromEntityType,
-      fromName: nameMap.get(`${edge.fromEntityId}`) ?? edge.fromEntityId,
+      fromName: nameMap.get(edge.fromEntityId) ?? edge.fromEntityId,
       toId: edge.toEntityId,
       toType: edge.toEntityType,
-      toName: nameMap.get(`${edge.toEntityId}`) ?? edge.toEntityId,
+      toName: nameMap.get(edge.toEntityId) ?? edge.toEntityId,
       note: edge.note,
+      depType: edge.depType,
       provenance: extractProvenance(edge),
-      score: 0.7,
+      score: 0.7 * evidenceMultiplier(edge.evidenceLevel),
     })
   }
 
-  return results
+  return results.sort((a, b) => b.score - a.score)
 }
 
 // --- Document reading ---
@@ -747,10 +955,238 @@ export async function readDocumentContent(
   }
 }
 
+// --- Governance / Decision retrieval ---
+
+/**
+ * Find all Decision entities with `status: "active"`.
+ * Decisions are authored explicitly (never auto-derived from repo data).
+ */
+export async function getActiveDecisions(): Promise<RetrievedEntity[]> {
+  const decisions = await prisma.decision.findMany({
+    where: { status: "active" },
+  })
+
+  return decisions.map((d) => ({
+    entityType: "DECISION",
+    id: d.id,
+    name: d.title,
+    path: d.title,
+    description: d.statement,
+    content: null,
+    provenance: extractProvenance(d),
+    score: 1.0,
+  }))
+}
+
+/**
+ * Find all entities currently violating active decisions. Returns the
+ * violating entities and the VIOLATES edges that connect them to Decisions.
+ *
+ * Relationship uses polymorphic fromEntityId/toEntityId (not Prisma relations),
+ * so we resolve the violating entities by querying their entity tables directly.
+ */
+export async function getDecisionViolations(): Promise<RetrievalResult> {
+  const result: RetrievalResult = {
+    entities: [],
+    relationships: [],
+    documents: [],
+  }
+
+  const violates = await prisma.relationship.findMany({
+    where: { kind: "VIOLATES", removedAt: null },
+  })
+
+  if (violates.length === 0) return result
+
+  const targetIds = violates.map((v) => v.toEntityId)
+
+  // The toEntity of a VIOLATES edge is always a Decision
+  const decisions = await prisma.decision.findMany({
+    where: { id: { in: targetIds } },
+    select: {
+      id: true, title: true, statement: true, status: true,
+      sourcePath: true, sourceType: true, sourceCommitSha: true,
+      firstSeenAt: true, retrievedAt: true, evidenceLevel: true,
+    },
+  })
+
+  // The fromEntity can be any entity type — resolve each by type
+  const violatingEntities: RetrievedEntity[] = []
+
+  const pkgSourceIds = violates
+    .filter((v) => v.fromEntityType === "PACKAGE")
+    .map((v) => v.fromEntityId)
+  if (pkgSourceIds.length > 0) {
+    const pkgs = await prisma.package.findMany({
+      where: { id: { in: pkgSourceIds } },
+      include: { repository: true },
+    })
+    for (const p of pkgs) {
+      violatingEntities.push({
+        entityType: "PACKAGE",
+        id: p.id,
+        name: p.name,
+        path: p.sourcePath,
+        description: p.description,
+        content: null,
+        provenance: extractProvenance(p),
+        score: 1.0,
+      })
+    }
+  }
+
+  const repSourceIds = violates
+    .filter((v) => v.fromEntityType === "REPOSITORY")
+    .map((v) => v.fromEntityId)
+  if (repSourceIds.length > 0) {
+    const repos = await prisma.repository.findMany({
+      where: { id: { in: repSourceIds } },
+    })
+    for (const r of repos) {
+      violatingEntities.push({
+        entityType: "REPOSITORY",
+        id: r.id,
+        name: r.name,
+        path: r.name,
+        description: r.url ?? null,
+        content: null,
+        provenance: extractProvenance(r),
+        score: 1.0,
+      })
+    }
+  }
+
+  const nameMap = new Map<string, string>()
+  for (const e of violatingEntities) nameMap.set(e.id, e.name)
+  result.entities.push(...violatingEntities)
+
+  for (const v of violates) {
+    const decision = decisions.find((d) => d.id === v.toEntityId)
+    if (!decision) continue
+    result.relationships.push({
+      id: v.id,
+      kind: "VIOLATES",
+      fromId: v.fromEntityId,
+      fromType: v.fromEntityType,
+      fromName: nameMap.get(v.fromEntityId) ?? v.fromEntityId,
+      toId: v.toEntityId,
+      toType: "DECISION",
+      toName: decision.title,
+      note: v.note,
+      depType: null,
+      provenance: extractProvenance(v),
+      score: 1.0,
+    })
+  }
+
+  result.entities = dedupeEntities(result.entities)
+  result.relationships = dedupeRelationships(result.relationships)
+
+  return result
+}
+
+/**
+ * Find all entities governed by a specific decision (outgoing GOVERNS edges
+ * from the decision). Supports traversal of governance relationships
+ * deterministically before any LLM is involved.
+ */
+export async function getGovernedEntities(
+  decisionId: string,
+): Promise<RetrievalResult> {
+  const result: RetrievalResult = {
+    entities: [],
+    relationships: [],
+    documents: [],
+  }
+
+  const decision = await prisma.decision.findUnique({
+    where: { id: decisionId },
+    select: {
+      id: true,
+      title: true,
+      statement: true,
+      status: true,
+      sourcePath: true,
+      sourceType: true,
+      sourceCommitSha: true,
+      firstSeenAt: true,
+      retrievedAt: true,
+      evidenceLevel: true,
+    },
+  })
+
+  if (!decision) return result
+
+  result.entities.push({
+    entityType: "DECISION",
+    id: decision.id,
+    name: decision.title,
+    path: decision.title,
+    description: decision.statement,
+    content: null,
+    provenance: extractProvenance(decision),
+    score: 1.0,
+  })
+
+  const governed = await prisma.relationship.findMany({
+    where: {
+      fromEntityId: decisionId,
+      kind: "GOVERNS",
+      removedAt: null,
+    },
+  })
+
+  if (governed.length === 0) return result
+
+  const targetIds = governed.map((g) => g.toEntityId)
+  const refs: EntityRef[] = []
+
+  // Resolve target packages
+  const pkgs = await prisma.package.findMany({
+    where: { id: { in: targetIds } },
+    include: { repository: true },
+  })
+  for (const p of pkgs) {
+    refs.push({ id: p.id, type: "PACKAGE" })
+    result.entities.push({
+      entityType: "PACKAGE",
+      id: p.id,
+      name: p.name,
+      path: p.sourcePath,
+      description: p.description,
+      content: null,
+      provenance: extractProvenance(p),
+      score: 0.7,
+    })
+  }
+
+  const nameMap = await resolveEntityNames(refs)
+
+  for (const g of governed) {
+    result.relationships.push({
+      id: g.id,
+      kind: "GOVERNS",
+      fromId: g.fromEntityId,
+      fromType: "DECISION",
+      fromName: decision.title,
+      toId: g.toEntityId,
+      toType: g.toEntityType,
+      toName: nameMap.get(g.toEntityId) ?? g.toEntityId,
+      note: g.note,
+      depType: null,
+      provenance: extractProvenance(g),
+      score: 0.8,
+    })
+  }
+
+  return result
+}
+
 // --- Main retrieval function ---
 
 export interface RetrieveOptions {
   limit?: number
+  repositoryName?: string
 }
 
 /**
@@ -772,7 +1208,9 @@ export async function retrieve(
   }
 
   // 1. Keyword search across all entity types
-  const searchResults = await searchContent(question, limit)
+  const searchResults = await searchContent(question, limit, {
+    repositoryName: options?.repositoryName,
+  })
   mergeResults(result, searchResults)
 
   // 2. For each found repository (excluding the synthetic "npm" repo),
@@ -785,20 +1223,24 @@ export async function retrieve(
     mergeResults(result, depResult)
   }
 
-  // 3. For each found package, find incoming CONSUMES edges
-  //    (i.e., what depends on this package). This is how we discover
-    // the SovGrant → @arcevo/facet-sdk edge when the user mentions the
-    // package name directly.
+  // 3. For each found package that's an external npm placeholder, find what
+  //    depends on it. For internal packages, find their dependents too.
   const packages = result.entities.filter((e) => e.entityType === "PACKAGE")
   for (const pkg of packages) {
-    if (pkg.provenance.sourceType === "inferred_pattern") {
-      // This is an npm placeholder — find what depends on it
-      const depResult = await getDependents(pkg.name)
-      mergeResults(result, depResult)
-    }
+    const depResult = await getDependents(pkg.name)
+    mergeResults(result, depResult)
   }
 
-  // Deduplicate
+  // 4. Include active decisions and any violations
+  const activeDecisions = await getActiveDecisions()
+  for (const dec of activeDecisions) {
+    result.entities.push(dec)
+  }
+
+  const violationResult = await getDecisionViolations()
+  mergeResults(result, violationResult)
+
+  // Deduplicate and sort by score
   result.entities = dedupeEntities(result.entities)
   result.relationships = dedupeRelationships(result.relationships)
   result.documents = dedupeDocuments(result.documents)
@@ -811,7 +1253,10 @@ export async function retrieve(
 /**
  * Format retrieval results as a text block suitable for inclusion in a
  * provider prompt. Every fact carries its provenance inline so the model
- * can cite it.
+ * can cite it with `[source: <sourcePath>, commit: <sourceCommitSha>]`.
+ *
+ * The provenance line uses `sourcePath="..."` form so the citation
+ * validation in the provider layer can extract and verify source paths.
  */
 export function formatContext(result: RetrievalResult): string {
   const lines: string[] = []
@@ -825,7 +1270,16 @@ export function formatContext(result: RetrievalResult): string {
     lines.push("=== Entities ===")
     lines.push("")
     for (const e of result.entities) {
-      lines.push(`[${e.entityType}] ${e.name}`)
+      if (e.entityType === "REPOSITORY") {
+        lines.push(`[Repository: ${e.name}]`)
+      } else if (e.entityType === "PACKAGE") {
+        const repoName = e.provenance.sourceType === "inferred_pattern"
+          ? "npm (external)"
+          : ""
+        lines.push(`[Package: ${e.name}]${repoName ? ` (${repoName})` : ""}`)
+      } else {
+        lines.push(`[${e.entityType}] ${e.name}`)
+      }
       if (e.description) {
         lines.push(`  description: ${e.description}`)
       }
@@ -845,6 +1299,9 @@ export function formatContext(result: RetrievalResult): string {
       if (r.note) {
         lines.push(`  range: ${r.note}`)
       }
+      if (r.depType) {
+        lines.push(`  depType: ${r.depType}`)
+      }
       lines.push(`  provenance: ${formatProvenance(r.provenance)}`)
       lines.push("")
     }
@@ -854,12 +1311,14 @@ export function formatContext(result: RetrievalResult): string {
     lines.push("=== Documents ===")
     lines.push("")
     for (const d of result.documents) {
-      lines.push(`[Document] ${d.path}`)
+      lines.push(`[Document] ${d.repositoryName}/${d.path}`)
       lines.push(`  provenance: ${formatProvenance(d.provenance)}`)
       if (d.content) {
         if (d.content.length > MAX_DOCUMENT_CHARS) {
           lines.push(`  content: ${d.content.slice(0, MAX_DOCUMENT_CHARS)}...`)
-          lines.push(`  [content truncated, full document is ${d.content.length} chars]`)
+          lines.push(
+            `  [content truncated, full document is ${d.content.length} chars]`,
+          )
         } else {
           lines.push(`  content: ${d.content}`)
         }

@@ -32,9 +32,9 @@ Instructions:
 - If the context does not contain enough information to answer, say "I don't know" rather than guessing.
 - cite sourcePath and sourceCommitSha from each fact's provenance. If a commit SHA is not available, cite "N/A".`
 
-const CITATION_REGEX = /\[source:\s*(.+?),\s*commit:\s*(.+?)\]/g
+export const CITATION_REGEX = /\[source:\s*(.+?),\s*commit:\s*(.+?)\]/g
 
-const DONT_KNOW_PATTERNS = [
+export const DONT_KNOW_PATTERNS = [
   "i don't know",
   "don't know",
   "cannot answer",
@@ -50,7 +50,7 @@ const DONT_KNOW_PATTERNS = [
 
 // --- Citation extraction ---
 
-function extractCitations(text: string): Citation[] {
+export function extractCitations(text: string): Citation[] {
   const citations: Citation[] = []
   const regex = new RegExp(CITATION_REGEX.source, "g")
   let match: RegExpExecArray | null
@@ -69,10 +69,8 @@ function extractCitations(text: string): Citation[] {
   return citations
 }
 
-// --- Unsourced-claim check ---
-
 /** Extract every sourcePath="..." value from a formatted context string. */
-function extractSourcePathsFromContext(context: string): Set<string> {
+export function extractSourcePathsFromContext(context: string): Set<string> {
   const paths = new Set<string>()
   const regex = /sourcePath="([^"]+)"/g
   let match: RegExpExecArray | null
@@ -82,6 +80,8 @@ function extractSourcePathsFromContext(context: string): Set<string> {
   }
   return paths
 }
+
+// --- Unsourced-claim check ---
 
 /**
  * Post-generation heuristic: flag answers that make factual claims
@@ -126,7 +126,7 @@ export function checkUnsourcedClaims(
   return warnings
 }
 
-// --- Provider implementation ---
+// --- Provider implementations ---
 
 export class AnthropicProvider implements IntelligenceProvider {
   private client: Anthropic
@@ -171,14 +171,33 @@ export class AnthropicProvider implements IntelligenceProvider {
   }
 }
 
+/**
+ * A no-cost provider for development and testing that never makes an
+ * API call. Returns a canned response (or "I don't know" by default).
+ */
+export class MockProvider implements IntelligenceProvider {
+  private cannedText: string | null = null
+
+  /** Set a canned response the next call to generate() will return. */
+  setResponse(text: string): void {
+    this.cannedText = text
+  }
+
+  async generate(request: GenerateRequest): Promise<Answer> {
+    const text = this.cannedText ?? "I don't know"
+
+    const citations = extractCitations(text)
+    const warnings = checkUnsourcedClaims(text, citations, request.context)
+
+    return { text, citations, warnings }
+  }
+}
+
 export function createProvider(): IntelligenceProvider {
   const apiKey = process.env.ANTHROPIC_API_KEY
-  if (!apiKey) {
-    throw new Error(
-      "ANTHROPIC_API_KEY environment variable is not set. " +
-        "Set it in your shell or in .env.",
-    )
-  }
   const model = process.env.ANTHROPIC_MODEL
+  if (!apiKey) {
+    return new MockProvider()
+  }
   return new AnthropicProvider(apiKey, model)
 }

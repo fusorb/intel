@@ -40,7 +40,7 @@ export function evidenceLevelToString(level: EvidenceLevel): string {
 
 export interface ProvenanceData {
   sourcePath: string
-  sourceCommitSha: string
+  sourceCommitSha: string | null
   retrievedAt: Date
   evidenceLevel: EvidenceLevel
 }
@@ -48,7 +48,7 @@ export interface ProvenanceData {
 /** Build a provenance object for DB writes. */
 export function createProvenance(
   sourcePath: string,
-  sourceCommitSha: string,
+  sourceCommitSha: string | null,
   level: EvidenceLevel = EvidenceLevel.Verified,
 ): ProvenanceData {
   return {
