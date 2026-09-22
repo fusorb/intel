@@ -1,17 +1,19 @@
 import { prisma } from "@fusorb/intel-graph"
+import type { DependencyType } from "@prisma/client"
 import { createProvenance, toEvidenceLevel } from "@fusorb/intel-evidence"
 import type { ExtractedPackage, ExtractedModule, ExtractedDocument } from "./types.js"
 
-type ProvLevel = "verified" | "strongly_supported" | "inferred" | "unknown"
-type ProvSourceType = "file" | "commit" | "human_statement" | "inferred_pattern"
+export type ProvLevel = "verified" | "strongly_supported" | "inferred" | "unknown"
+export type ProvSourceType = "file" | "commit" | "human_statement" | "inferred_pattern"
+
 interface PackageRef {
   id: string
   sourcePath: string
 }
 
-interface ProvenanceFields {
+export interface ProvenanceFields {
   sourcePath: string
-  sourceCommitSha: string
+  sourceCommitSha: string | null
   retrievedAt: Date
   evidenceLevel: ProvLevel
   sourceType: ProvSourceType
@@ -23,9 +25,9 @@ interface ProvenanceFields {
  * re-emitted as plain string literals so they typecheck directly against the
  * Prisma-generated enum input types.
  */
-function provenance(
+export function provenance(
   sourcePath: string,
-  commitSha: string,
+  commitSha: string | null,
   level: ProvLevel,
   sourceType: ProvSourceType,
 ): ProvenanceFields {
@@ -54,12 +56,12 @@ export async function upsertRepository(
       name,
       url,
       defaultBranch: branch,
-      ...provenance(sourcePath, commitSha ?? "", level, sourceType),
+      ...provenance(sourcePath, commitSha, level, sourceType),
     },
     update: {
       url,
       defaultBranch: branch,
-      ...provenance(sourcePath, commitSha ?? "", level, sourceType),
+      ...provenance(sourcePath, commitSha, level, sourceType),
       removedAt: null,
     },
   })
@@ -69,7 +71,7 @@ export async function upsertRepository(
 export async function upsertPackage(
   repositoryId: string,
   pkg: ExtractedPackage,
-  commitSha: string,
+  commitSha: string | null,
 ): Promise<string> {
   return (
     await prisma.package.upsert({
@@ -81,6 +83,8 @@ export async function upsertPackage(
         description: pkg.description,
         dependencies: pkg.dependencies ?? undefined,
         devDependencies: pkg.devDependencies ?? undefined,
+        peerDependencies: pkg.peerDependencies ?? undefined,
+        optionalDependencies: pkg.optionalDependencies ?? undefined,
         ...provenance(pkg.sourcePath, commitSha, "verified", "file"),
       },
       update: {
@@ -89,6 +93,8 @@ export async function upsertPackage(
         description: pkg.description,
         dependencies: pkg.dependencies ?? undefined,
         devDependencies: pkg.devDependencies ?? undefined,
+        peerDependencies: pkg.peerDependencies ?? undefined,
+        optionalDependencies: pkg.optionalDependencies ?? undefined,
         ...provenance(pkg.sourcePath, commitSha, "verified", "file"),
         removedAt: null,
       },
@@ -99,7 +105,7 @@ export async function upsertPackage(
 export async function upsertModule(
   repositoryId: string,
   mod: ExtractedModule,
-  commitSha: string,
+  commitSha: string | null,
 ): Promise<string> {
   return (
     await prisma.module.upsert({
@@ -125,7 +131,7 @@ export async function upsertModule(
 export async function upsertDocument(
   repositoryId: string,
   doc: ExtractedDocument,
-  commitSha: string,
+  commitSha: string | null,
 ): Promise<string> {
   return (
     await prisma.document.upsert({
@@ -155,7 +161,7 @@ export async function linkContains(
   targetId: string,
   targetType: "PACKAGE" | "MODULE" | "DOCUMENT",
   sourcePath: string,
-  commitSha: string,
+  commitSha: string | null,
 ): Promise<void> {
   await prisma.relationship.upsert({
     where: {
@@ -213,14 +219,18 @@ export async function ensureExternalPackage(
         description: null,
         dependencies: undefined,
         devDependencies: undefined,
-        ...provenance("npm:" + name, "", "inferred", "inferred_pattern"),
+        peerDependencies: undefined,
+        optionalDependencies: undefined,
+        ...provenance("npm:" + name, null, "inferred", "inferred_pattern"),
       },
       update: {
         version: null,
         description: null,
         dependencies: undefined,
         devDependencies: undefined,
-        ...provenance("npm:" + name, "", "inferred", "inferred_pattern"),
+        peerDependencies: undefined,
+        optionalDependencies: undefined,
+        ...provenance("npm:" + name, null, "inferred", "inferred_pattern"),
         removedAt: null,
       },
     })
@@ -242,9 +252,10 @@ async function resolveDependencyTarget(
 export async function linkConsumes(
   sourcePkgId: string,
   targetPkgId: string,
-  range: string,
+  range: string | null,
+  depType: DependencyType | null,
   sourcePath: string,
-  commitSha: string,
+  commitSha: string | null,
 ): Promise<void> {
   await prisma.relationship.upsert({
     where: {
@@ -263,10 +274,12 @@ export async function linkConsumes(
       toEntityType: "PACKAGE",
       kind: "CONSUMES",
       note: range,
+      depType,
       ...provenance(sourcePath, commitSha, "inferred", "file"),
     },
     update: {
       note: range,
+      depType,
       ...provenance(sourcePath, commitSha, "inferred", "file"),
       removedAt: null,
     },
@@ -274,31 +287,47 @@ export async function linkConsumes(
 }
 
 /**
- * For every dependency/devDependency of a package, upsert a CONSUMES edge whose
- * target is either the ingested package it resolves to or an external placeholder.
+ * For every dependency/devDependency/peerDependency/optionalDependency of a
+ * package, upsert a CONSUMES edge whose target is either the ingested package
+ * it resolves to or an external placeholder. Each edge is tagged with its
+ * dependency type so they are not collapsed into an undifferentiated edge.
  */
 export async function syncPackageConsumes(
   pkg: PackageRef,
   dependencies: Record<string, string> | null,
   devDependencies: Record<string, string> | null,
-  commitSha: string,
+  peerDependencies: Record<string, string> | null,
+  optionalDependencies: Record<string, string> | null,
+  commitSha: string | null,
 ): Promise<number> {
   const npmRepositoryId = await ensureNpmRepository()
   let edges = 0
   for (const [name, spec] of Object.entries(dependencies ?? {})) {
     const targetId = await resolveDependencyTarget(name, npmRepositoryId)
-    await linkConsumes(pkg.id, targetId, spec, pkg.sourcePath, commitSha)
+    await linkConsumes(pkg.id, targetId, spec, "dependency", pkg.sourcePath, commitSha)
     edges++
   }
   for (const [name, spec] of Object.entries(devDependencies ?? {})) {
     const targetId = await resolveDependencyTarget(name, npmRepositoryId)
-    await linkConsumes(pkg.id, targetId, spec, pkg.sourcePath, commitSha)
+    await linkConsumes(pkg.id, targetId, spec, "dev", pkg.sourcePath, commitSha)
+    edges++
+  }
+  for (const [name, spec] of Object.entries(peerDependencies ?? {})) {
+    const targetId = await resolveDependencyTarget(name, npmRepositoryId)
+    await linkConsumes(pkg.id, targetId, spec, "peer", pkg.sourcePath, commitSha)
+    edges++
+  }
+  for (const [name, spec] of Object.entries(optionalDependencies ?? {})) {
+    const targetId = await resolveDependencyTarget(name, npmRepositoryId)
+    await linkConsumes(pkg.id, targetId, spec, "optional", pkg.sourcePath, commitSha)
     edges++
   }
   return edges
 }
 
-/** Mark pre-existing entities for a repo as stale (soft delete) so re-ingests converge. */
+/** Mark pre-existing entities and relationships for a repo as stale (soft delete)
+ *  so re-ingests converge. Stale rows are reactivated by upsert when the entity
+ *  is still present in the current snapshot; rows for removed entities stay stale. */
 export async function markStale(repositoryId: string): Promise<void> {
   const now = new Date()
   await prisma.package.updateMany({
@@ -312,5 +341,80 @@ export async function markStale(repositoryId: string): Promise<void> {
   await prisma.document.updateMany({
     where: { repositoryId, removedAt: null },
     data: { removedAt: now },
+  })
+
+  // Mark stale CONTAINS relationships from this repository
+  await prisma.relationship.updateMany({
+    where: {
+      fromEntityId: repositoryId,
+      fromEntityType: "REPOSITORY",
+      kind: "CONTAINS",
+      removedAt: null,
+    },
+    data: { removedAt: now },
+  })
+
+  // Mark stale CONSUMES relationships from packages belonging to this repository
+  const pkgIds = await prisma.package.findMany({
+    where: { repositoryId },
+    select: { id: true },
+  })
+  if (pkgIds.length > 0) {
+    await prisma.relationship.updateMany({
+      where: {
+        fromEntityId: { in: pkgIds.map((p) => p.id) },
+        fromEntityType: "PACKAGE",
+        kind: "CONSUMES",
+        removedAt: null,
+      },
+      data: { removedAt: now },
+    })
+  }
+}
+
+/** Record the start of an ingestion run and return its ID. */
+export async function startIngestionRun(
+  repositoryId: string,
+  commitSha: string,
+  branch: string | null,
+): Promise<string> {
+  const row = await prisma.ingestionRun.create({
+    data: {
+      repositoryId,
+      commitSha,
+      branch,
+      startedAt: new Date(),
+      status: "running",
+      ...provenance("ingest", commitSha, "inferred", "inferred_pattern"),
+    },
+  })
+  return row.id
+}
+
+/** Update an ingestion run's completion status and counts. */
+export async function completeIngestionRun(
+  runId: string,
+  status: "success" | "failed",
+  counts: {
+    packages: number
+    modules: number
+    documents: number
+    consumesEdges: number
+    containsEdges: number
+  },
+  errors?: string[],
+): Promise<void> {
+  await prisma.ingestionRun.update({
+    where: { id: runId },
+    data: {
+      completedAt: new Date(),
+      status,
+      packagesCount: counts.packages,
+      modulesCount: counts.modules,
+      documentsCount: counts.documents,
+      consumesEdges: counts.consumesEdges,
+      containsEdges: counts.containsEdges,
+      errorsJson: errors && errors.length > 0 ? JSON.stringify(errors) : undefined,
+    },
   })
 }

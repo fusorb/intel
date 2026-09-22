@@ -18,6 +18,9 @@
     "@fusorb/intel-graph": "workspace:*",
     "commander": "^12.1.0"
   },
+  "optionalDependencies": {
+    "typescript": "^5.9.3"
+  },
   "devDependencies": {
     "tsx": "^4.23.12",
     "tsup": "^8.5.1"
