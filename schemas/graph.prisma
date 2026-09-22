@@ -51,12 +51,19 @@ enum RelationshipKind {
   DEPENDS_ON      /// Module/Symbol depends on another
   RENAMED_FROM    /// Entity renamed from another (Arc→current-name lineage)
   DOCUMENTS       /// Document describes another entity
-  EXPORTS         /// Module exports a Symbol
+  EXPORTS       /// Module exports a Symbol
   DEFINES         /// Module/Symbol defines a Symbol
   REFERENCES      /// Symbol references another Symbol
   GOVERNS         /// Decision governs a Repository/Package/Module
   VIOLATES        /// Entity currently violates a Decision (e.g. Relnex
                    /// VIOLATES the "Facet is the only UI system" Decision)
+}
+
+enum DependencyType {
+  dependency         /// from package.json "dependencies"
+  dev                /// from package.json "devDependencies"
+  peer               /// from package.json "peerDependencies"
+  optional           /// from package.json "optionalDependencies"
 }
 
 /// Shared provenance fields — every fact-bearing model repeats this shape
@@ -73,6 +80,7 @@ model Repository {
   modules     Module[]
   documents   Document[]
   symbols     Symbol[]
+  ingestionRuns IngestionRun[]
 
   sourcePath      String        @default(".")
   sourceType      SourceType    @default(file)
@@ -95,12 +103,14 @@ model Package {
   // Raw manifest data — kept for completeness/debugging, but NOT the source
   // of truth for cross-package queries. Ingestion must also synthesize
   // CONSUMES Relationship rows from these at ingest time (see note below).
-  dependencies    Json?
-  devDependencies Json?
+  dependencies      Json?
+  devDependencies   Json?
+  peerDependencies   Json?
+  optionalDependencies Json?
 
   sourcePath      String          // path to package.json relative to repo root
   sourceType      SourceType    @default(file)
-  sourceCommitSha String
+  sourceCommitSha String?         // nullable: external npm packages have no commit SHA
   firstSeenAt     DateTime      @default(now())
   retrievedAt     DateTime      @default(now())
   removedAt       DateTime?
@@ -121,7 +131,7 @@ model Module {
 
   sourcePath      String
   sourceType      SourceType    @default(file)
-  sourceCommitSha String
+  sourceCommitSha String?         // nullable for consistency with external/inferred entities
   firstSeenAt     DateTime      @default(now())
   retrievedAt     DateTime      @default(now())
   removedAt       DateTime?
@@ -142,7 +152,7 @@ model Symbol {
 
   sourcePath      String
   sourceType      SourceType    @default(file)
-  sourceCommitSha String
+  sourceCommitSha String?
   firstSeenAt     DateTime      @default(now())
   retrievedAt     DateTime      @default(now())
   removedAt       DateTime?
@@ -165,7 +175,7 @@ model Document {
 
   sourcePath      String
   sourceType      SourceType    @default(file)
-  sourceCommitSha String
+  sourceCommitSha String?         // nullable for consistency with provenance model
   firstSeenAt     DateTime      @default(now())
   retrievedAt     DateTime      @default(now())
   removedAt       DateTime?
@@ -193,6 +203,38 @@ model Decision {
   evidenceLevel   EvidenceLevel @default(verified)
 }
 
+/// Records a single ingestion pass over a repository, capturing the commit
+/// SHA, branch, timestamp, entity counts, and status. Enables temporal
+/// queries like "what changed between commit A and commit B?" and
+/// "when was this repo last successfully ingested?".
+model IngestionRun {
+  id              String        @id @default(cuid())
+  repositoryId    String
+  repository      Repository?   @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+  commitSha       String
+  branch          String?
+  startedAt       DateTime      @default(now())
+  completedAt     DateTime?
+  status          String        @default("running") // running | success | failed
+  packagesCount   Int           @default(0)
+  modulesCount    Int           @default(0)
+  documentsCount  Int           @default(0)
+  consumesEdges   Int           @default(0)
+  containsEdges   Int           @default(0)
+  errorsJson      String?       // JSON array of error strings, populated on failure
+
+  sourcePath      String        @default("ingest")
+  sourceType      SourceType    @default(inferred_pattern)
+  sourceCommitSha String?
+  firstSeenAt     DateTime      @default(now())
+  retrievedAt     DateTime      @default(now())
+  removedAt       DateTime?
+  evidenceLevel   EvidenceLevel @default(verified)
+
+  @@index([repositoryId, startedAt])
+  @@index([commitSha])
+}
+
 model Relationship {
   id              String        @id @default(cuid())
   fromEntityId    String
@@ -205,6 +247,10 @@ model Relationship {
   // for a VIOLATES edge, a short note on what specifically is violated.
   note            String?
 
+  // For CONSUMES edges: the dependency category from package.json
+  // (dependency | dev | peer | optional); null for all other edge kinds.
+  depType         DependencyType?
+
   sourcePath      String
   sourceType      SourceType    @default(file)
   sourceCommitSha String?
@@ -216,5 +262,9 @@ model Relationship {
   @@index([fromEntityId, fromEntityType])
   @@index([toEntityId, toEntityType])
   @@index([kind])
+  /// Per (from,to,kind) uniqueness. depType is preserved as a regular field,
+  /// not part of the constraint, because PostgreSQL treats NULLs in unique
+  /// indexes as distinct — so a nullable column there would silently allow
+  /// duplicates for CONTAINS edges (depType=null).
   @@unique([fromEntityId, toEntityId, fromEntityType, toEntityType, kind])
 }
