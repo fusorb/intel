@@ -110,6 +110,7 @@ type TsNode = {
   pos: number
   end: number
   kind: number
+  text?: string
   name?: { text: string }
 }
 
@@ -243,7 +244,7 @@ export function parseTypeScriptFile(filePath: string, source: string): ParseResu
           if (ts.isNamespaceImport(importClause.namedBindings)) {
             isNamespace = true
             const b = importClause.namedBindings.name as TsNode
-            if (b) names.push(b.text)
+            if (b && b.text) names.push(b.text)
           } else if (ts.isNamedImports(importClause.namedBindings)) {
             for (const el of importClause.namedBindings.elements) {
               names.push(el.name.text)
