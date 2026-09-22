@@ -1,13 +1,9 @@
 import { describe, it, expect, beforeAll } from "vitest"
 import { prisma } from "@fusorb/intel-graph"
 import {
-  searchRepository,
-  searchPackage,
   getDependencies,
-  getPackageDependencies,
   getDecisionViolations,
   getActiveDecisions,
-  traverseRelationships,
   extractKeywords,
   retrieve,
 } from "@fusorb/intel-retrieval"
