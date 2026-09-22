@@ -54,7 +54,7 @@ join table:
 | **Repository** | A cloned Fusorb repo | `facet`, `sovgrant`, `relnex`, `sovport` |
 | **Package** | A `package.json` within a repo | `@fusorb/facet-components`, `@fusorb/facet-auth` |
 | **Module** | A source directory containing `.ts`/`.tsx`/`.js`/`.jsx` files | `packages/components/src`, `src/domains/auth` |
-| **Symbol** | A named declaration in source (table exists, extraction deferred to a later session) | `useAuth`, `handleApiRoute` |
+| **Symbol** | A named declaration in source (table exists, extraction available via TypeScript parser boundary) | `useAuth`, `handleApiRoute` |
 | **Document** | A Markdown/MDX file | `README.md`, `docs/architecture.md` |
 | **Decision** | A recorded rule, invariant, or architectural decision (written by humans or agents, not ingested) | "Facet is the single mandatory UI system across the ecosystem" |
 
@@ -124,12 +124,15 @@ git clone/fetch ──► file-tree walk ──► entity extraction ──► D
 Re-ingests are idempotent: stale entities are soft-deleted (`removedAt` set) before the current set
 is refreshed, so the graph always converges to "as of" the latest commit.
 
-### Ingestion is deliberately shallow today
+### Symbol extraction boundary
 
-Intel ingests **file-structure-level** data — package manifests, directory structure, and document
-files. It does **not** currently parse source code at the symbol/AST level (Tree-sitter is planned
-but deferred to a later session). This is a deliberate choice: the graph schema and provenance
-model are the priority; symbol extraction slots in once the ingestion foundation is trusted.
+Intel ingests **file-structure-level** data as the default — package manifests, directory structure, and
+document files. Symbol-level extraction is available via an **opt-in TypeScript compiler API parser**
+(`packages/ingest/src/parser.ts`) that handles `.ts`/`.tsx` files. The parser is opt-in: if the
+`typescript` package is not present, symbol extraction is skipped gracefully with a non-fatal error
+recorded on the result. Integration into the full ingestion pipeline is staged — the extraction
+boundary is ready and tested, but `linkSymbols` is not yet called from the main `ingest.ts`
+orchestration.
 
 ---
 
@@ -152,6 +155,7 @@ fusorb/intel/
 │           ├── git.ts            # git CLI wrappers (cloneOrFetch, currentCommit, etc.)
 │           ├── ingest.ts         # Orchestration: clone → extract → persist → link
 │           ├── index.ts          # Public re-exports
+│           ├── parser.ts         # Optional TS/TSX symbol extraction (TypeScript compiler API)
 │           └── types.ts          # Extracted entity interfaces
 │   ├── provider/                 # IntelligenceProvider interface + Anthropic implementation
 │   │   └── src/index.ts
@@ -177,7 +181,7 @@ fusorb/intel/
 |---|---|
 | `@fusorb/intel-evidence` | The `EvidenceLevel` enum and provenance type/helpers. Zero runtime dependencies. Imported by `graph` and re-exported, so any consumer can `import { EvidenceLevel } from "@fusorb/intel-graph"`. |
 | `@fusorb/intel-graph` | PrismaClient singleton (with `pg` Pool via `@prisma/adapter-pg`, matching the SovGrant pattern) plus re-exports of evidence vocabulary. |
-| `@fusorb/intel-ingest` | The ingestion library and CLI. Depends on `graph` and `evidence`. |
+| `@fusorb/intel-ingest` | The ingestion library and CLI. Depends on `graph` and `evidence`. The TypeScript parser (`parser.ts`) is opt-in — `typescript` is an optional dependency, gracefully handled when absent. |
 | `@fusorb/intel-provider` | `IntelligenceProvider` interface + Anthropic-hosted model implementation, with citation extraction and unsourced-claim checks. |
 | `@fusorb/intel-retrieval` | Keyword search across all entity types, graph traversal (CONSUMES/dependents/CONTAINS), document reading, and `formatContext` for assembling prompt context. |
 | `@fusorb/intel-tools` | Read-only tool surface wrapping retrieval: `searchRepo`, `readDocument`, `inspectDependencies`. |
@@ -292,10 +296,11 @@ confirmed?" and get a time-aware answer.
 1. Make your changes.
 2. `pnpm -r typecheck` — type-check every package (must pass).
 3. `pnpm -r build` — build every package with tsup (must pass).
-4. If you changed `schemas/graph.prisma`: `pnpm prisma:push` to sync the database
+4. `pnpm test` — run the full test suite (unit + integration + acceptance).
+5. If you changed `schemas/graph.prisma`: `pnpm prisma:push` to sync the database
    (or `pnpm prisma:generate` if only types changed).
-5. Re-ingest repos after schema or code changes: `pnpm ingest:all`.
-6. Re-run verification: `pnpm verify`.
+6. Re-ingest repos after schema or code changes: `pnpm ingest:all`.
+7. Re-run verification: `pnpm verify`.
 
 ### Conventions
 
@@ -359,8 +364,8 @@ Because every fact carries its commit SHA and timestamp, Intel can answer questi
 - **`apps/api`** — any API or console surface. An eventual thin `@fusorb/intel-sdk` HTTP client
   (analogous to `facet-sdk`) is the right shape for external consumers — the internal packages give
   direct database access and should not be published.
-- **Symbol-level extraction (Tree-sitter)** — the Symbol table and its relationship kinds exist,
-  but ingestion currently stays at the package/module/document level.
+- **Wire the TypeScript parser boundary into the ingestion pipeline** — the parser (`parser.ts`)
+   and `linkSymbols` are ready and tested, but not yet called from `ingest.ts` orchestration.
 - **Embedding/vector search** — retrieval is currently keyword-based; hybrid lexical + embedding
   search is planned but not yet implemented.
 - **Multi-step autonomous tool-calling loop** — `packages/tools` provides the read-only tool surface

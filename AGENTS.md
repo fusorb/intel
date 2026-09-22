@@ -28,13 +28,28 @@ link Decisions to the entities they govern and the entities that currently viola
 
 ```
 fusorb/intel
-├── schemas/graph.prisma       # Canonical Prisma schema (committed)
+├── schemas/graph.prisma       # Canonical Prisma schema (committed, source of truth)
 ├── prisma.config.ts           # Prisma 7 config (schema path)
+├── vitest.config.ts           # Test runner config
 ├── packages/
 │   ├── evidence/              # EvidenceLevel enum + provenance helpers (thin, no deps)
 │   ├── graph/                 # Prisma client singleton + re-exports
-│   └── ingest/                # Repo cloning, file-tree walking, entity extraction, CLI
+│   ├── ingest/                # Repo cloning, file-tree walking, entity extraction, CLI
+│   │   └── src/
+│   │       ├── cli.ts
+│   │       ├── extract.ts
+│   │       ├── graph.ts
+│   │       ├── git.ts
+│   │       ├── ingest.ts
+│   │       ├── index.ts
+│   │       ├── parser.ts      # Optional TS/TSX symbol extraction (TypeScript compiler API)
+│   │       └── types.ts
+│   ├── provider/              # IntelligenceProvider interface + Anthropic implementation
+│   ├── retrieval/             # Keyword search, graph traversal, context formatting
+│   └── tools/                 # Read-only tool surface (searchRepo, readDocument, etc.)
+├── tests/                     # Cross-package acceptance suite + shared setup
 ├── scripts/verify.ts          # Throwaway validation script (3 acceptance facts)
+├── scripts/ask.ts             # Question-answering CLI entry point
 ├── CLAUDE.md                  # Agent-facing instructions
 ├── AGENTS.md                  # This file
 └── .agent/                    # Gitignored scratch (repo clones, outputs, logs)
@@ -58,9 +73,10 @@ pnpm prisma:push
 
 1. Make your changes.
 2. `pnpm -r typecheck` — must pass before commit.
-3. `pnpm -r build` — must pass (tsup builds each package).
-4. If you changed `schemas/graph.prisma`: `pnpm prisma:push` (or `pnpm prisma:generate` if only types changed).
-5. Re-ingest repos after code changes: `pnpm ingest:all`.
+3. `pnpm test` — run the full test suite (unit + integration + acceptance).
+4. `pnpm -r build` — must pass (tsup builds each package).
+5. If you changed `schemas/graph.prisma`: `pnpm prisma:push` (or `pnpm prisma:generate` if only types changed).
+6. Re-ingest repos after code changes: `pnpm ingest:all`.
 
 ## Conventions to follow
 
@@ -68,8 +84,10 @@ pnpm prisma:push
 - **ESM only** — no CommonJS. Use `import`/`export`, never `require`.
 - **Provenance is mandatory** — every DB write must set `sourcePath`, `sourceCommitSha`,
   `retrievedAt`, and `evidenceLevel`. This is not optional metadata.
-- **Evidence levels** — use `EvidenceLevel.Verified` for data read directly from files,
-  `EvidenceLevel.Inferred` for derived/inferred facts, `EvidenceLevel.Unknown` for unassessed.
+- **Evidence levels** — use `EvidenceLevel.verified` for data read directly from files,
+  `EvidenceLevel.strongly_supported` for backed by strong but indirect evidence,
+  `EvidenceLevel.inferred` for derived/inferred facts (e.g. dependency edges),
+  `EvidenceLevel.unknown` for unassessed.
 - **No speculative entities** — the schema has exactly six entity types (Repository, Package,
   Module, Symbol, Document, Decision). Don't add more unless the verification step proves
   they're needed.
@@ -94,6 +112,17 @@ pnpm prisma:studio    # web UI at http://localhost:5555
 # or
 pnpm exec tsx -e 'import { prisma } from "@fusorb/intel-graph"; console.log(await prisma.repository.findMany())'
 ```
+
+### Run tests
+
+```bash
+pnpm test                                     # full suite (unit + integration + acceptance)
+pnpm test packages/ingest/test/parser.test.ts # single test file
+```
+
+Tests live next to their source files under `packages/*/test/`. Cross-cutting
+acceptance tests live in `tests/suite.test.ts`. The `DATABASE_URL` environment
+variable is loaded from `.env` by `tests/setup.ts`.
 
 ### Run verification
 

@@ -27,7 +27,8 @@ This repo is **Tier-1 infra**. It is not a product that ships to end users.
 - `packages/provider` — `IntelligenceProvider` abstraction
 - `packages/tools` — tool surface
 - `apps/api` — any API/console
-- Symbol-level extraction (Tree-sitter)
+- Wire the TypeScript parser boundary (`packages/ingest/src/parser.ts`) into the ingestion pipeline —
+  the parser is ready and tested, but `linkSymbols` is not yet called from `ingest.ts`.
 
 ## Quick start
 
@@ -56,7 +57,7 @@ pnpm verify
 | `schemas/graph.prisma` | Canonical Prisma schema — six entities + Relationship |
 | `packages/evidence/src/index.ts` | `EvidenceLevel` enum + provenance helpers |
 | `packages/graph/src/index.ts` | PrismaClient singleton + re-exports |
-| `packages/ingest/src/` | Ingestion library (`index.ts`) + CLI (`cli.ts`) |
+| `packages/ingest/src/` | Ingestion library (`index.ts`) + CLI (`cli.ts`) + optional TS/TSX parser (`parser.ts`) |
 | `prisma.config.ts` | Prisma config pointing to `schemas/graph.prisma` |
 
 ## Architecture
@@ -94,6 +95,7 @@ pnpm verify
 | `pnpm prisma:generate` | Regenerate Prisma client from schema |
 | `pnpm typecheck` | Type-check root (project references) |
 | `pnpm -r typecheck` | Type-check every package |
+| `pnpm test` | Run the full test suite (unit + integration + acceptance) |
 | `pnpm -r build` | Build every package (tsup) |
 | `pnpm ingest <url> [--branch <branch>]` | Ingest a single repo |
 | `pnpm ingest:all` | Ingest all 4 repos (facet, sovgrant, relnex, sovport) |
