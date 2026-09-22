@@ -61,6 +61,7 @@ export interface RetrievedEntity {
   content: string | null
   provenance: ProvenanceInfo
   score: number
+  repositoryName?: string | null
 }
 
 export interface RetrievedRelationship {

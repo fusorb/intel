@@ -1,6 +1,8 @@
 import { resolve } from "node:path"
+import { readFileSync, statSync } from "node:fs"
 import { repositoryNameFromUrl, cloneOrFetch, defaultBranch, AGENT_REPOS } from "./git.js"
-import { extractRepo } from "./extract.js"
+import { extractRepo, collectSourceFiles } from "./extract.js"
+import { linkSymbols } from "./parser.js"
 import {
   upsertRepository,
   upsertPackage,
@@ -20,6 +22,11 @@ interface InsertedPackage {
   sourcePath: string
   pkg: ExtractedPackage
 }
+
+/** Cap total TS/TSX files parsed per repo to bound ingestion cost. */
+const MAX_SYMBOL_FILES = 300
+/** Skip files larger than this to avoid expensive parsing of generated/bundled output. */
+const MAX_SYMBOL_FILE_SIZE = 200_000
 
 /** Clone a repository (if needed) and persist it into the knowledge graph. */
 export async function ingestRepo(
@@ -53,6 +60,7 @@ export async function ingestRepo(
   let packagesCount = 0
   let modulesCount = 0
   let documentsCount = 0
+  let symbolsCount = 0
   let consumesEdges = 0
   let containsEdges = 0
 
@@ -94,6 +102,24 @@ export async function ingestRepo(
     }
   }
 
+  // Extract symbols from each TS/TSX source file.
+  // Bounded by MAX_SYMBOL_FILES / MAX_SYMBOL_FILE_SIZE to keep ingestion cost predictable.
+  const sourceFiles = collectSourceFiles(dest)
+  let parsedFiles = 0
+  for (const sf of sourceFiles) {
+    if (parsedFiles >= MAX_SYMBOL_FILES) break
+    try {
+      if (statSync(sf.abs).size > MAX_SYMBOL_FILE_SIZE) continue
+      const source = readFileSync(sf.abs, "utf-8")
+      symbolsCount += await linkSymbols(repoId, sf.rel, source, commitSha)
+      parsedFiles++
+    } catch (err) {
+      errors.push(
+        `symbol ${sf.rel}: ${err instanceof Error ? err.message : String(err)}`,
+      )
+    }
+  }
+
   for (const { id, sourcePath, pkg } of inserted) {
     try {
       consumesEdges += await syncPackageConsumes(
@@ -122,6 +148,7 @@ export async function ingestRepo(
       packages: packagesCount,
       modules: modulesCount,
       documents: documentsCount,
+      symbols: symbolsCount,
       consumesEdges,
       containsEdges,
     },
@@ -135,6 +162,7 @@ export async function ingestRepo(
     packages: packagesCount,
     modules: modulesCount,
     documents: documentsCount,
+    symbols: symbolsCount,
     consumesEdges,
     containsEdges,
   }

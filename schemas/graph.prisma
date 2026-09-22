@@ -143,8 +143,8 @@ model Module {
 model Symbol {
   id              String        @id @default(cuid())
   name            String
-  path            String          // "src/module/file.ts:42" — out of scope for
-                                   // ingestion this session; table exists, stays empty
+  path            String          // "src/module/file.ts:42" — populated by the optional
+                                    // TS/TSX parser (parser.ts) wired into ingestRepo
   kind            String?
 
   repositoryId    String
@@ -219,6 +219,7 @@ model IngestionRun {
   packagesCount   Int           @default(0)
   modulesCount    Int           @default(0)
   documentsCount  Int           @default(0)
+  symbolsCount    Int           @default(0)
   consumesEdges   Int           @default(0)
   containsEdges   Int           @default(0)
   errorsJson      String?       // JSON array of error strings, populated on failure

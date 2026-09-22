@@ -55,6 +55,7 @@ interface IngestSummary {
   packagesExtracted: number
   modulesExtracted: number
   documentsExtracted: number
+  symbolsExtracted: number
   consumesLinked: number
   containsLinked: number
   errors: string[]
@@ -108,11 +109,13 @@ function currentCommit(cwd: string): string
 function defaultBranch(cwd: string): string
 ```
 
-### Symbol extraction boundary (opt-in)
+### Symbol extraction (wired into ingestion)
 
-> Requires the `typescript` package as an optional dependency. If `typescript` is
-> not installed, `parseTypeScriptFile` returns a result with a single error string
-> and an empty symbols list — ingestion continues without symbol-level data.
+Requires the `typescript` package as an optional dependency. If `typescript` is
+not installed, `parseFile` returns a result with a single error string and an
+empty symbols list — ingestion continues without symbol-level data. The ingestion
+pipeline parses each `.ts`/`.tsx` file and calls `linkSymbols` to upsert extracted
+symbols with full provenance.
 
 ```ts
 interface SymbolInfo {

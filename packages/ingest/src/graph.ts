@@ -342,6 +342,10 @@ export async function markStale(repositoryId: string): Promise<void> {
     where: { repositoryId, removedAt: null },
     data: { removedAt: now },
   })
+  await prisma.symbol.updateMany({
+    where: { repositoryId, removedAt: null },
+    data: { removedAt: now },
+  })
 
   // Mark stale CONTAINS relationships from this repository
   await prisma.relationship.updateMany({
@@ -399,6 +403,7 @@ export async function completeIngestionRun(
     packages: number
     modules: number
     documents: number
+    symbols: number
     consumesEdges: number
     containsEdges: number
   },
@@ -412,6 +417,7 @@ export async function completeIngestionRun(
       packagesCount: counts.packages,
       modulesCount: counts.modules,
       documentsCount: counts.documents,
+      symbolsCount: counts.symbols,
       consumesEdges: counts.consumesEdges,
       containsEdges: counts.containsEdges,
       errorsJson: errors && errors.length > 0 ? JSON.stringify(errors) : undefined,

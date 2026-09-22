@@ -42,7 +42,7 @@ fusorb/intel
 │   │       ├── git.ts
 │   │       ├── ingest.ts
 │   │       ├── index.ts
-│   │       ├── parser.ts      # Optional TS/TSX symbol extraction (TypeScript compiler API)
+│   │       ├── parser.ts      # TS/TSX symbol extraction via TypeScript compiler API (wired into ingestion)
 │   │       └── types.ts
 │   ├── provider/              # IntelligenceProvider interface + Anthropic implementation
 │   ├── retrieval/             # Keyword search, graph traversal, context formatting
@@ -91,8 +91,10 @@ pnpm prisma:push
 - **No speculative entities** — the schema has exactly six entity types (Repository, Package,
   Module, Symbol, Document, Decision). Don't add more unless the verification step proves
   they're needed.
-- **Don't build the answering layer yet** — Session 2 covers retrieval/provider/tools/API.
-  Focus on ingestion being correct and the graph schema being sound.
+- **Don't build the answering layer yet** — `packages/retrieval`, `packages/provider`, and
+  `packages/tools` are already implemented. What's still deferred: `find_symbol` / `find_callers`
+  / `find_references` tools, embedding/hybrid retrieval, the agentic multi-step tool loop,
+  `apps/api`, and any UI.
 
 ## Common tasks
 

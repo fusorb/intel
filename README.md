@@ -54,7 +54,7 @@ join table:
 | **Repository** | A cloned Fusorb repo | `facet`, `sovgrant`, `relnex`, `sovport` |
 | **Package** | A `package.json` within a repo | `@fusorb/facet-components`, `@fusorb/facet-auth` |
 | **Module** | A source directory containing `.ts`/`.tsx`/`.js`/`.jsx` files | `packages/components/src`, `src/domains/auth` |
-| **Symbol** | A named declaration in source (table exists, extraction available via TypeScript parser boundary) | `useAuth`, `handleApiRoute` |
+| **Symbol** | A named declaration in source (extracted from `.ts`/`.tsx` via the TypeScript compiler API) | `useAuth`, `handleApiRoute` |
 | **Document** | A Markdown/MDX file | `README.md`, `docs/architecture.md` |
 | **Decision** | A recorded rule, invariant, or architectural decision (written by humans or agents, not ingested) | "Facet is the single mandatory UI system across the ecosystem" |
 
@@ -103,7 +103,7 @@ with their timestamps**, not collapsed into a single "current" number. The graph
 The ingestion flow (`packages/ingest/src/ingest.ts`):
 
 ```
-git clone/fetch ──► file-tree walk ──► entity extraction ──► DB upsert ──► relationship sync
+git clone/fetch ──► file-tree walk ──► entity + symbol extraction ──► DB upsert ──► relationship sync
 ```
 
 1. **Clone or fetch** — `git clone --quiet --no-tags --depth=1` for new repos; `git fetch --prune`
@@ -112,10 +112,11 @@ git clone/fetch ──► file-tree walk ──► entity extraction ──► D
    directories that contain source files (modules) and directories that contain `package.json`
    (packages).
 3. **Extract entities** — reads each `package.json` (name, version, description, dependencies,
-   devDependencies), each source directory (module), and each Markdown file (document, with title
-   and first non-empty line as description).
-4. **Persist with upsert** — for packages, modules, and documents; each write carries provenance
-   tied to the current commit SHA.
+   devDependencies), each source directory (module), each Markdown file (document, with title
+   and first non-empty line as description), and each `.ts`/`.tsx` file for symbol declarations
+   (functions, classes, consts, etc.) via the TypeScript compiler API parser.
+4. **Persist with upsert** — for packages, modules, documents, and symbols; each write carries
+   provenance tied to the current commit SHA.
 5. **Sync relationships** — writes `CONTAINS` edges from the repository to every entity, and
    `CONSUMES` edges from each package to its declared dependencies. External dependencies not found
    in any ingested repo are placed under a synthetic `npm` repository as placeholder entities with
@@ -124,15 +125,15 @@ git clone/fetch ──► file-tree walk ──► entity extraction ──► D
 Re-ingests are idempotent: stale entities are soft-deleted (`removedAt` set) before the current set
 is refreshed, so the graph always converges to "as of" the latest commit.
 
-### Symbol extraction boundary
+### Symbol extraction
 
-Intel ingests **file-structure-level** data as the default — package manifests, directory structure, and
-document files. Symbol-level extraction is available via an **opt-in TypeScript compiler API parser**
-(`packages/ingest/src/parser.ts`) that handles `.ts`/`.tsx` files. The parser is opt-in: if the
-`typescript` package is not present, symbol extraction is skipped gracefully with a non-fatal error
-recorded on the result. Integration into the full ingestion pipeline is staged — the extraction
-boundary is ready and tested, but `linkSymbols` is not yet called from the main `ingest.ts`
-orchestration.
+In addition to file-structure-level data (package manifests, directory structure, and document
+files), Intel extracts **symbol-level** declarations from every `.ts`/`.tsx` file via the optional
+TypeScript compiler API parser (`packages/ingest/src/parser.ts`). The parser is wired into the
+ingestion pipeline: each source file is parsed and its symbols (functions, classes, consts, etc.)
+are upserted with full provenance. If the `typescript` package is not installed, symbol extraction
+is skipped gracefully. A file-count and file-size cap (`MAX_PARSED_FILES`, `MAX_SYMBOL_FILE_SIZE`)
+bounds the cost per ingestion run; `node_modules` and build output are excluded.
 
 ---
 
@@ -155,7 +156,7 @@ fusorb/intel/
 │           ├── git.ts            # git CLI wrappers (cloneOrFetch, currentCommit, etc.)
 │           ├── ingest.ts         # Orchestration: clone → extract → persist → link
 │           ├── index.ts          # Public re-exports
-│           ├── parser.ts         # Optional TS/TSX symbol extraction (TypeScript compiler API)
+│           ├── parser.ts         # TS/TSX symbol extraction (TypeScript compiler API, wired into ingestion)
 │           └── types.ts          # Extracted entity interfaces
 │   ├── provider/                 # IntelligenceProvider interface + Anthropic implementation
 │   │   └── src/index.ts
@@ -316,8 +317,9 @@ confirmed?" and get a time-aware answer.
   `inferred_pattern` for synthesized patterns (e.g. the synthetic `npm` repository).
 - **Soft deletes** — re-ingests mark stale entities with `removedAt` rather than hard-deleting, so
   the graph retains a full history of what was removed and when.
-- **Idempotent upserts** — `Repository`, `Package`, `Module`, `Document`, and `Relationship` are
-  all upserted by natural key, not appended. Re-ingesting the same commit produces no duplicates.
+- **Idempotent upserts** — `Repository`, `Package`, `Module`, `Document`, `Symbol`, and
+  `Relationship` are all upserted by natural key, not appended. Re-ingesting the same commit
+  produces no duplicates.
 
 ---
 
@@ -337,8 +339,10 @@ Intel ingests these four product repositories:
 - **package.json files** → Package entities with real and dev dependency maps
 - **source directories** (anything with `.ts`/`.tsx`/`.js`/`.jsx`) → Module entities
 - **Markdown files** (`.md`, `.mdx`, `.markdown`) → Document entities with title + summary
+- **TS/TSX files** → Symbol entities (functions, classes, consts, etc.) via the TypeScript compiler API
 - **Dependency declarations** → CONSUMES relationship edges (with semver range as the `note`)
 - **Repository → entity containment** → CONTAINS relationship edges
+- **IngestionRun** → per-repo ingestion metadata (commit, status, entity/edge counts)
 
 ### What Intel surfaces
 
@@ -359,16 +363,17 @@ Because every fact carries its commit SHA and timestamp, Intel can answer questi
 
 ---
 
-## Deferred (future sessions)
+## Still deferred
 
 - **`apps/api`** — any API or console surface. An eventual thin `@fusorb/intel-sdk` HTTP client
   (analogous to `facet-sdk`) is the right shape for external consumers — the internal packages give
   direct database access and should not be published.
-- **Wire the TypeScript parser boundary into the ingestion pipeline** — the parser (`parser.ts`)
-   and `linkSymbols` are ready and tested, but not yet called from `ingest.ts` orchestration.
-- **Embedding/vector search** — retrieval is currently keyword-based; hybrid lexical + embedding
+- **`find_symbol`, `find_callers`, `find_references` tools** — symbol-level query tools not yet
+  implemented in `packages/tools`.
+- **Embedding / hybrid retrieval** — retrieval is currently keyword-based; hybrid lexical + embedding
   search is planned but not yet implemented.
-- **Multi-step autonomous tool-calling loop** — `packages/tools` provides the read-only tool surface
+- **Agentic multi-step tool-calling loop** — `packages/tools` provides the read-only tool surface
   but is not yet wired into an agentic loop.
+- **Any UI** — no frontend is planned at this tier.
 
 See the [CLAUDE.md](./CLAUDE.md) for the full agent-facing developer guide.

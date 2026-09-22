@@ -8,27 +8,34 @@ relationships into PostgreSQL/Prisma, and tags every fact with provenance and an
 
 This repo is **Tier-1 infra**. It is not a product that ships to end users.
 
-## Current scope (Session 1)
+## Current scope
 
 - **Graph**: Prisma schema (`schemas/graph.prisma`) — six entity types (Repository, Package,
   Module, Symbol, Document, Decision) + a polymorphic Relationship join table with
   `CONTAINS`, `CONSUMES`, `DEPENDS_ON`, `RENAMED_FROM`, `DOCUMENTS`, `EXPORTS`, `DEFINES`,
-  `REFERENCES`, `GOVERNS`, and `VIOLATES` edge kinds. Provenance on every row. `Decision`
-  entities hold architectural rules/invariants and are written by humans/agents (not
-  ingested), with `sourceType` almost always `human_statement`.
+  `REFERENCES`, `GOVERNS`, and `VIOLATES` edge kinds. `DependencyType` enum (`PRODUCTION`,
+  `DEVELOPMENT`) for dependency edges. `IngestionRun` model tracks per-repo ingestion
+  counts and status. Provenance on every row. `Decision` entities hold architectural
+  rules/invariants and are written by humans/agents (not ingested), with `sourceType`
+  almost always `human_statement`.
 - **Evidence**: `packages/evidence` — the `EvidenceLevel` enum (verified / strongly_supported /
   inferred / unknown) + helpers for attaching provenance.
-- **Ingest**: `packages/ingest` — clones a repo via git, walks the file tree, extracts entities,
-  and writes to the database. CLI: `pnpm ingest <repo-url> [--branch <branch>]`.
+- **Ingest**: `packages/ingest` — clones a repo via git, walks the file tree, extracts entities
+  (packages, modules, documents, **symbols**), and writes to the database. CLI: `pnpm ingest
+  <repo-url> [--branch <branch>]`. TS/TSX symbol extraction is wired in via the TypeScript
+  compiler API (`parser.ts`, `typescript` as an optional dependency).
+- **Retrieval**: `packages/retrieval` — keyword search, graph traversal, context formatting.
+- **Provider**: `packages/provider` — `IntelligenceProvider` interface + Anthropic implementation.
+- **Tools**: `packages/tools` — read-only tool surface (`searchRepo`, `readDocument`,
+  `inspectDependencies`).
 
-## Deferred to Session 2
+## Still deferred
 
-- `packages/retrieval` — query/ranking
-- `packages/provider` — `IntelligenceProvider` abstraction
-- `packages/tools` — tool surface
-- `apps/api` — any API/console
-- Wire the TypeScript parser boundary (`packages/ingest/src/parser.ts`) into the ingestion pipeline —
-  the parser is ready and tested, but `linkSymbols` is not yet called from `ingest.ts`.
+- `find_symbol`, `find_callers`, `find_references` tools (not yet in `packages/tools`)
+- Embedding / hybrid retrieval (not yet in `packages/retrieval`)
+- The agentic multi-step tool-calling loop
+- `apps/api` — any API/console surface
+- Any UI
 
 ## Quick start
 

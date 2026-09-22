@@ -57,6 +57,18 @@ export function extractRepo(repoRoot: string): ExtractedRepo {
   return { packages, modules, documents }
 }
 
+/** Collect every source file (.ts/.tsx) in a repo checkout, respecting skip dirs. */
+export function collectSourceFiles(repoRoot: string): ScannedFile[] {
+  const files: ScannedFile[] = []
+  const sourceDirs = new Set<string>()
+  const packageDirs = new Set<string>()
+  walk(repoRoot, repoRoot, files, sourceDirs, packageDirs)
+  return files.filter((f) => {
+    const ext = extname(f.rel).toLowerCase()
+    return ext === ".ts" || ext === ".tsx"
+  })
+}
+
 function walk(
   root: string,
   dir: string,

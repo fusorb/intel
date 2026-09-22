@@ -9,6 +9,7 @@ async function report(summary: IngestSummary): Promise<void> {
   console.log(
     `ingested ${summary.repo} @ ${short}: ` +
       `${summary.packages} packages, ${summary.modules} modules, ${summary.documents} documents, ` +
+      `${summary.symbols} symbols, ` +
       `${summary.consumesEdges} CONSUMES edges, ${summary.containsEdges} CONTAINS edges`,
   )
 }

@@ -39,6 +39,7 @@ export interface IngestSummary {
   packages: number
   modules: number
   documents: number
+  symbols: number
   consumesEdges: number
   containsEdges: number
 }
