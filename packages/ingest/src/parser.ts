@@ -103,29 +103,14 @@ export interface FileParser {
 /*  TypeScript / TSX parser (uses the `typescript` package)          */
 /* ------------------------------------------------------------------ */
 
-/** Maps a TS SyntaxKind name to our SymbolKind enum, or `null` if unsupported. */
-function mapTsKind(kind: string): SymbolKind | null {
-  switch (kind) {
-    case "FunctionDeclaration":
-      return "function"
-    case "ClassDeclaration":
-      return "class"
-    case "InterfaceDeclaration":
-      return "interface"
-    case "TypeAliasDeclaration":
-      return "type"
-    case "EnumDeclaration":
-      return "enum"
-    case "VariableDeclaration":
-      return "const" // const / let / var all map to "const" for simplicity
-    case "PropertyDeclaration":
-      return "property"
-    case "SetAccessor":
-    case "GetAccessor":
-      return "method"
-    default:
-      return null
-  }
+// Minimal node type — `typescript` is an optional dependency so we don't
+// reference its full type namespace; we treat nodes as opaque and access
+// only the properties we need at runtime through the `ts` module.
+type TsNode = {
+  pos: number
+  end: number
+  kind: number
+  name?: { text: string }
 }
 
 /**
@@ -172,7 +157,7 @@ export function parseTypeScriptFile(filePath: string, source: string): ParseResu
     )
   }
 
-  const pos = (node: ts.Node) => {
+  const pos = (node: TsNode) => {
     const { line, character } = ts.getLineAndCharacterOfPosition(sourceFile, node.pos)
     const end = ts.getLineAndCharacterOfPosition(sourceFile, node.end)
     return {
@@ -184,7 +169,7 @@ export function parseTypeScriptFile(filePath: string, source: string): ParseResu
   }
 
   /** Collect a single symbol node if it maps to a SymbolKind. */
-  function collectSymbol(node: ts.Node): void {
+  function collectSymbol(node: TsNode): void {
     let kind: SymbolKind | null = null
     let name: string | undefined
 
@@ -215,7 +200,7 @@ export function parseTypeScriptFile(filePath: string, source: string): ParseResu
         ? ts.getModifiers(node)
         : undefined
       const isExported = modifiers?.some(
-        (m) => m.kind === ts.SyntaxKind.ExportKeyword,
+        (m: TsNode) => m.kind === ts.SyntaxKind.ExportKeyword,
       ) ?? false
       result.symbols.push({
         name,
@@ -229,7 +214,7 @@ export function parseTypeScriptFile(filePath: string, source: string): ParseResu
     }
   }
 
-  function visit(node: ts.Node): void {
+  function visit(node: TsNode): void {
     collectSymbol(node)
     // Recurse into class bodies, function bodies, etc.
     ts.forEachChild(node, visit)
@@ -257,7 +242,7 @@ export function parseTypeScriptFile(filePath: string, source: string): ParseResu
         if (importClause.namedBindings) {
           if (ts.isNamespaceImport(importClause.namedBindings)) {
             isNamespace = true
-            const b = importClause.namedBindings.name as ts.Identifier
+            const b = importClause.namedBindings.name as TsNode
             if (b) names.push(b.text)
           } else if (ts.isNamedImports(importClause.namedBindings)) {
             for (const el of importClause.namedBindings.elements) {
@@ -304,7 +289,7 @@ export function parseTypeScriptFile(filePath: string, source: string): ParseResu
         } else {
           // export * from "mod" or export { default }
           const name = ts.isArrayLiteralNode(node.exportClause)
-            ? (node.exportClause.elements[0] as ts.Identifier)?.text ?? "$default"
+            ? (node.exportClause.elements[0] as TsNode)?.name?.text ?? "$default"
             : "$default"
           result.exports.push({
             name,
