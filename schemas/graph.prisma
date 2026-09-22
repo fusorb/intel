@@ -157,6 +157,8 @@ model Document {
   title           String?
   path            String
   description     String?
+  /// Full text of the document, read directly from the file at ingest time.
+  content         String?
 
   repositoryId    String
   repository      Repository    @relation(fields: [repositoryId], references: [id], onDelete: Cascade)

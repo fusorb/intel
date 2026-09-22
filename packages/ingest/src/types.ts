@@ -20,6 +20,7 @@ export interface ExtractedDocument {
   title: string | null
   path: string
   description: string | null
+  content: string | null
   sourcePath: string
 }
 

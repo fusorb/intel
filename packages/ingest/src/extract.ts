@@ -123,6 +123,7 @@ function parseDocument(relPath: string, absPath: string): ExtractedDocument {
       title: null,
       path: relPath,
       description: null,
+      content: null,
       sourcePath: relPath,
     }
   }
@@ -130,6 +131,7 @@ function parseDocument(relPath: string, absPath: string): ExtractedDocument {
     title: basename(relPath, extname(relPath)) || null,
     path: relPath,
     description: firstLine(text, 240),
+    content: text,
     sourcePath: relPath,
   }
 }

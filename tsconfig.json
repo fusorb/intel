@@ -4,6 +4,9 @@
   "references": [
     { "path": "packages/evidence" },
     { "path": "packages/graph" },
-    { "path": "packages/ingest" }
+    { "path": "packages/ingest" },
+    { "path": "packages/retrieval" },
+    { "path": "packages/provider" },
+    { "path": "packages/tools" }
   ]
 }

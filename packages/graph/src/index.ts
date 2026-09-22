@@ -33,8 +33,9 @@ if (process.env.NODE_ENV !== "production") {
   globalForPrisma.prisma = prisma
 }
 
-// Re-export PrismaClient and Prisma types for downstream consumers
-export { PrismaClient } from "@prisma/client"
+// Re-export PrismaClient, the Prisma namespace, and generated enum types
+// for downstream consumers (retrieval, tools, etc.)
+export { PrismaClient, EntityType, RelationshipKind } from "@prisma/client"
 export type { Prisma } from "@prisma/client"
 
 // Re-export evidence vocabulary so callers can import everything from @fusorb/intel-graph
