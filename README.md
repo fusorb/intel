@@ -153,10 +153,17 @@ fusorb/intel/
 │           ├── ingest.ts         # Orchestration: clone → extract → persist → link
 │           ├── index.ts          # Public re-exports
 │           └── types.ts          # Extracted entity interfaces
+│   ├── provider/                 # IntelligenceProvider interface + Anthropic implementation
+│   │   └── src/index.ts
+│   ├── retrieval/                # Keyword search, graph traversal, context formatting
+│   │   └── src/index.ts
+│   └── tools/                    # Read-only tool surface (searchRepo, readDocument, inspectDependencies)
+│       └── src/index.ts
 ├── prisma.config.ts              # Prisma 7 config (schema path, datasource URL)
 ├── scripts/
 │   ├── postinstall.cjs           # Runs `prisma generate` on install
-│   └── verify.ts                 # Throwaway script: asserts 3 acceptance facts from real data
+│   ├── verify.ts                 # Throwaway script: asserts 3 acceptance facts from real data
+│   └── ask.ts                    # Question-answering CLI: `pnpm ask "<question>"`
 ├── tsconfig.base.json            # Shared TypeScript strict config
 ├── tsconfig.json                 # Root project references
 ├── pnpm-workspace.yaml           # pnpm workspaces config
@@ -171,6 +178,9 @@ fusorb/intel/
 | `@fusorb/intel-evidence` | The `EvidenceLevel` enum and provenance type/helpers. Zero runtime dependencies. Imported by `graph` and re-exported, so any consumer can `import { EvidenceLevel } from "@fusorb/intel-graph"`. |
 | `@fusorb/intel-graph` | PrismaClient singleton (with `pg` Pool via `@prisma/adapter-pg`, matching the SovGrant pattern) plus re-exports of evidence vocabulary. |
 | `@fusorb/intel-ingest` | The ingestion library and CLI. Depends on `graph` and `evidence`. |
+| `@fusorb/intel-provider` | `IntelligenceProvider` interface + Anthropic-hosted model implementation, with citation extraction and unsourced-claim checks. |
+| `@fusorb/intel-retrieval` | Keyword search across all entity types, graph traversal (CONSUMES/dependents/CONTAINS), document reading, and `formatContext` for assembling prompt context. |
+| `@fusorb/intel-tools` | Read-only tool surface wrapping retrieval: `searchRepo`, `readDocument`, `inspectDependencies`. |
 
 ---
 
@@ -259,6 +269,22 @@ This throwaway script (`scripts/verify.ts`) asserts three facts from real data:
 2. Facet ships Package entities for `packages/motion`, `packages/native`, and `packages/sandbox`.
 3. Relnex depends on shadcn-related packages (not `@fusorb/facet-components`).
 
+### Asking questions
+
+Intel answers natural-language questions about the graph end-to-end through retrieval + provider:
+
+```bash
+pnpm ask "Why does SovGrant's frontend import @arcevo/facet-sdk instead of @fusorb/facet-sdk?"
+```
+
+`scripts/ask.ts` performs a single retrieval pass over the graph, formats the results with
+provenance into a prompt, and sends it to a hosted model via `packages/provider`. Every factual
+claim in the answer is cited inline as `[source: <sourcePath>, commit: <sourceCommitSha>]`, and
+the provider runs a post-generation check that flags unsourced claims or citations whose
+`sourcePath` doesn't appear in the retrieved context. Follow-up questions automatically reuse the
+previous retrieval's context (`.agent/ask-context.txt`), so you can ask "When was that fact last
+confirmed?" and get a time-aware answer.
+
 ---
 
 ## Development workflow
@@ -330,12 +356,14 @@ Because every fact carries its commit SHA and timestamp, Intel can answer questi
 
 ## Deferred (future sessions)
 
-- **`packages/retrieval`** — query ranking and hybrid lexical + embedding search
-- **`packages/provider`** — `IntelligenceProvider` interface + hosted-model implementation
-- **`packages/tools`** — the read-only tool surface (`search_repo`, `read_file`, `find_symbol`,
-  `find_references`, `inspect_git_history`)
-- **`apps/api`** — any API or console surface
-- **Symbol-level extraction** (Tree-sitter) — the Symbol table and its relationship kinds exist,
-  but ingestion currently stays at the package/module/document level
+- **`apps/api`** — any API or console surface. An eventual thin `@fusorb/intel-sdk` HTTP client
+  (analogous to `facet-sdk`) is the right shape for external consumers — the internal packages give
+  direct database access and should not be published.
+- **Symbol-level extraction (Tree-sitter)** — the Symbol table and its relationship kinds exist,
+  but ingestion currently stays at the package/module/document level.
+- **Embedding/vector search** — retrieval is currently keyword-based; hybrid lexical + embedding
+  search is planned but not yet implemented.
+- **Multi-step autonomous tool-calling loop** — `packages/tools` provides the read-only tool surface
+  but is not yet wired into an agentic loop.
 
 See the [CLAUDE.md](./CLAUDE.md) for the full agent-facing developer guide.

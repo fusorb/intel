@@ -71,14 +71,33 @@ function extractCitations(text: string): Citation[] {
 
 // --- Unsourced-claim check ---
 
+/** Extract every sourcePath="..." value from a formatted context string. */
+function extractSourcePathsFromContext(context: string): Set<string> {
+  const paths = new Set<string>()
+  const regex = /sourcePath="([^"]+)"/g
+  let match: RegExpExecArray | null
+  while ((match = regex.exec(context)) !== null) {
+    const path = match[1]
+    if (path) paths.add(path)
+  }
+  return paths
+}
+
 /**
  * Post-generation heuristic: flag answers that make factual claims
- * without any inline citations. This is a cheap check, not a full
- * factuality verifier — it must at least catch the zero-citations case.
+ * without any inline citations, and catch fabricated citations by
+ * cross-referencing each extracted citation's sourcePath against the
+ * provenance actually present in the retrieved context.
+ *
+ * Two independent failure modes, reported with distinct warnings:
+ * 1. Zero citations — the answer makes claims but cites nothing.
+ * 2. Fabricated citations — the answer cites a sourcePath that does not
+ *    appear in any provenance line in the context.
  */
 export function checkUnsourcedClaims(
   text: string,
   citations: Citation[],
+  context: string,
 ): string[] {
   const warnings: string[] = []
 
@@ -94,6 +113,16 @@ export function checkUnsourcedClaims(
     }
   }
 
+  const contextSourcePaths = extractSourcePathsFromContext(context)
+  for (const citation of citations) {
+    if (!contextSourcePaths.has(citation.sourcePath)) {
+      warnings.push(
+        `Citation sourcePath "${citation.sourcePath}" does not appear in the ` +
+          "retrieved context — this citation may be fabricated.",
+      )
+    }
+  }
+
   return warnings
 }
 
@@ -105,7 +134,7 @@ export class AnthropicProvider implements IntelligenceProvider {
 
   constructor(apiKey: string, model?: string) {
     this.client = new Anthropic({ apiKey })
-    this.model = model ?? "claude-3-5-sonnet-20241022"
+    this.model = model ?? "claude-sonnet-5"
   }
 
   async generate(request: GenerateRequest): Promise<Answer> {
@@ -136,7 +165,7 @@ export class AnthropicProvider implements IntelligenceProvider {
       .trim()
 
     const citations = extractCitations(text)
-    const warnings = checkUnsourcedClaims(text, citations)
+    const warnings = checkUnsourcedClaims(text, citations, request.context)
 
     return { text, citations, warnings }
   }
