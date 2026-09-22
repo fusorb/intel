@@ -6,6 +6,8 @@ export interface ExtractedPackage {
   description: string | null
   dependencies: Record<string, string> | null
   devDependencies: Record<string, string> | null
+  peerDependencies: Record<string, string> | null
+  optionalDependencies: Record<string, string> | null
   sourcePath: string
 }
 
@@ -33,6 +35,7 @@ export interface ExtractedRepo {
 export interface IngestSummary {
   repo: string
   commitSha: string
+  branch: string | null
   packages: number
   modules: number
   documents: number

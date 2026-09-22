@@ -9,6 +9,9 @@ import {
   linkContains,
   syncPackageConsumes,
   markStale,
+  startIngestionRun,
+  completeIngestionRun,
+  ensureNpmRepository,
 } from "./graph.js"
 import type { IngestSummary, ExtractedPackage } from "./types.js"
 
@@ -38,44 +41,101 @@ export async function ingestRepo(
     "verified",
   )
 
+  const runId = await startIngestionRun(repoId, commitSha, effectiveBranch)
+
   // Re-ingest is idempotent: soft-delete stale rows, then refresh the current set.
   await markStale(repoId)
 
   const extracted = extractRepo(dest)
 
+  const errors: string[] = []
   const inserted: InsertedPackage[] = []
+  let packagesCount = 0
+  let modulesCount = 0
+  let documentsCount = 0
+  let consumesEdges = 0
+  let containsEdges = 0
+
   for (const pkg of extracted.packages) {
-    const id = await upsertPackage(repoId, pkg, commitSha)
-    await linkContains(repoId, id, "PACKAGE", pkg.sourcePath, commitSha)
-    inserted.push({ id, sourcePath: pkg.sourcePath, pkg })
+    try {
+      const id = await upsertPackage(repoId, pkg, commitSha)
+      packagesCount++
+      await linkContains(repoId, id, "PACKAGE", pkg.sourcePath, commitSha)
+      containsEdges++
+      inserted.push({ id, sourcePath: pkg.sourcePath, pkg })
+    } catch (err) {
+      errors.push(
+        `package ${pkg.name}: ${err instanceof Error ? err.message : String(err)}`,
+      )
+    }
   }
   for (const mod of extracted.modules) {
-    const id = await upsertModule(repoId, mod, commitSha)
-    await linkContains(repoId, id, "MODULE", mod.sourcePath, commitSha)
+    try {
+      const id = await upsertModule(repoId, mod, commitSha)
+      modulesCount++
+      await linkContains(repoId, id, "MODULE", mod.sourcePath, commitSha)
+      containsEdges++
+    } catch (err) {
+      errors.push(
+        `module ${mod.path}: ${err instanceof Error ? err.message : String(err)}`,
+      )
+    }
   }
   for (const doc of extracted.documents) {
-    const id = await upsertDocument(repoId, doc, commitSha)
-    await linkContains(repoId, id, "DOCUMENT", doc.sourcePath, commitSha)
+    try {
+      const id = await upsertDocument(repoId, doc, commitSha)
+      documentsCount++
+      await linkContains(repoId, id, "DOCUMENT", doc.sourcePath, commitSha)
+      containsEdges++
+    } catch (err) {
+      errors.push(
+        `document ${doc.path}: ${err instanceof Error ? err.message : String(err)}`,
+      )
+    }
   }
 
-  let consumesEdges = 0
   for (const { id, sourcePath, pkg } of inserted) {
-    consumesEdges += await syncPackageConsumes(
-      { id, sourcePath },
-      pkg.dependencies,
-      pkg.devDependencies,
-      commitSha,
-    )
+    try {
+      consumesEdges += await syncPackageConsumes(
+        { id, sourcePath },
+        pkg.dependencies,
+        pkg.devDependencies,
+        pkg.peerDependencies,
+        pkg.optionalDependencies,
+        commitSha,
+      )
+    } catch (err) {
+      errors.push(
+        `consumes ${pkg.name}: ${err instanceof Error ? err.message : String(err)}`,
+      )
+    }
   }
+
+  // Ensure the npm placeholder repository exists even if no internal package
+  // referenced external deps during this run.
+  await ensureNpmRepository()
+
+  await completeIngestionRun(
+    runId,
+    errors.length > 0 ? "failed" : "success",
+    {
+      packages: packagesCount,
+      modules: modulesCount,
+      documents: documentsCount,
+      consumesEdges,
+      containsEdges,
+    },
+    errors.length > 0 ? errors : undefined,
+  )
 
   return {
     repo: repoName,
     commitSha,
-    packages: extracted.packages.length,
-    modules: extracted.modules.length,
-    documents: extracted.documents.length,
+    branch: effectiveBranch,
+    packages: packagesCount,
+    modules: modulesCount,
+    documents: documentsCount,
     consumesEdges,
-    containsEdges:
-      extracted.packages.length + extracted.modules.length + extracted.documents.length,
+    containsEdges,
   }
 }

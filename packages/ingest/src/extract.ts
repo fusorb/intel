@@ -110,6 +110,8 @@ function parsePackage(relPath: string, absPath: string): ExtractedPackage | null
     description: stringField(parsed, "description"),
     dependencies: dependencyMap(parsed["dependencies"]),
     devDependencies: dependencyMap(parsed["devDependencies"]),
+    peerDependencies: dependencyMap(parsed["peerDependencies"]),
+    optionalDependencies: dependencyMap(parsed["optionalDependencies"]),
     sourcePath: relPath,
   }
 }
