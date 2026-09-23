@@ -406,8 +406,12 @@ export async function completeIngestionRun(
     symbols: number
     consumesEdges: number
     containsEdges: number
+    symbolFilesParsed: number
+    symbolFilesSkipped: number
+    symbolFilesErrored: number
   },
   errors?: string[],
+  warnings?: string[],
 ): Promise<void> {
   await prisma.ingestionRun.update({
     where: { id: runId },
@@ -420,7 +424,11 @@ export async function completeIngestionRun(
       symbolsCount: counts.symbols,
       consumesEdges: counts.consumesEdges,
       containsEdges: counts.containsEdges,
+      symbolFilesParsed: counts.symbolFilesParsed,
+      symbolFilesSkipped: counts.symbolFilesSkipped,
+      symbolFilesErrored: counts.symbolFilesErrored,
       errorsJson: errors && errors.length > 0 ? JSON.stringify(errors) : undefined,
+      warningsJson: warnings && warnings.length > 0 ? JSON.stringify(warnings) : undefined,
     },
   })
 }

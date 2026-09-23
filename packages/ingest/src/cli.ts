@@ -12,6 +12,16 @@ async function report(summary: IngestSummary): Promise<void> {
       `${summary.symbols} symbols, ` +
       `${summary.consumesEdges} CONSUMES edges, ${summary.containsEdges} CONTAINS edges`,
   )
+  console.log(
+    `  symbol extraction: ${summary.symbolFilesParsed} parsed, ` +
+      `${summary.symbolFilesSkipped} skipped, ${summary.symbolFilesErrored} errored`,
+  )
+  if (summary.warnings.length > 0) {
+    console.log(`  warnings:`)
+    for (const w of summary.warnings) {
+      console.log(`    ${w}`)
+    }
+  }
 }
 
 const program = new Command()

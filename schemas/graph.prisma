@@ -156,10 +156,10 @@ model Symbol {
   firstSeenAt     DateTime      @default(now())
   retrievedAt     DateTime      @default(now())
   removedAt       DateTime?
-  evidenceLevel   EvidenceLevel @default(inferred) // AST extraction is a step removed
-                                                    // from "read the file directly"
+   evidenceLevel   EvidenceLevel @default(verified) // AST extraction reads directly
+                                                      // from the repository source file
 
-  @@unique([repositoryId, path, name])
+   @@unique([repositoryId, path, name])
 }
 
 model Document {
@@ -208,21 +208,25 @@ model Decision {
 /// queries like "what changed between commit A and commit B?" and
 /// "when was this repo last successfully ingested?".
 model IngestionRun {
-  id              String        @id @default(cuid())
-  repositoryId    String
-  repository      Repository?   @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
-  commitSha       String
-  branch          String?
-  startedAt       DateTime      @default(now())
-  completedAt     DateTime?
-  status          String        @default("running") // running | success | failed
-  packagesCount   Int           @default(0)
-  modulesCount    Int           @default(0)
-  documentsCount  Int           @default(0)
-  symbolsCount    Int           @default(0)
-  consumesEdges   Int           @default(0)
-  containsEdges   Int           @default(0)
-  errorsJson      String?       // JSON array of error strings, populated on failure
+  id                String        @id @default(cuid())
+  repositoryId      String
+  repository        Repository?   @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+  commitSha         String
+  branch            String?
+  startedAt          DateTime @default(now())
+  completedAt         DateTime?
+  status              String   @default("running") // running | success | failed
+  packagesCount       Int      @default(0)
+  modulesCount       Int       @default(0)
+  documentsCount     Int       @default(0)
+  symbolsCount       Int       @default(0)
+  symbolFilesParsed  Int       @default(0) // .ts/.tsx files successfully parsed
+  symbolFilesSkipped Int       @default(0) // files beyond size cap or unsupported
+  symbolFilesErrored Int       @default(0) // files with parse errors
+  consumesEdges      Int       @default(0)
+  containsEdges      Int       @default(0)
+  errorsJson         String?   // JSON array of hard error strings (failures)
+  warningsJson       String?   // JSON array of diagnostic strings (skips, parse errors)
 
   sourcePath      String        @default("ingest")
   sourceType      SourceType    @default(inferred_pattern)

@@ -81,7 +81,7 @@ export interface RetrievedRelationship {
 
 export interface RetrievedDocument {
   path: string
-  repositoryName: string
+  repositoryName?: string | null
   content: string | null
   provenance: ProvenanceInfo
   score: number
@@ -421,6 +421,7 @@ export async function searchContent(
         content: null,
         provenance: extractProvenance(p),
         score: exactScore(p.evidenceLevel),
+        repositoryName: p.repository?.name ?? null,
       })
     }
 
@@ -467,6 +468,7 @@ export async function searchContent(
         content: null,
         provenance: extractProvenance(p),
         score: substringScore(p.evidenceLevel),
+        repositoryName: p.repository?.name ?? null,
       })
     }
 
@@ -517,6 +519,7 @@ export async function searchContent(
         content: null,
         provenance: extractProvenance(m),
         score: substringScore(m.evidenceLevel),
+        repositoryName: m.repository?.name ?? null,
       })
     }
 
@@ -544,10 +547,11 @@ export async function searchContent(
         content: d.content,
         provenance: extractProvenance(d),
         score: substringScore(d.evidenceLevel),
+        repositoryName: d.repository?.name ?? null,
       })
       result.documents.push({
         path: d.path,
-        repositoryName: d.repository?.name ?? "unknown",
+        repositoryName: d.repository?.name ?? null,
         content: d.content,
         provenance: extractProvenance(d),
         score: substringScore(d.evidenceLevel),
@@ -645,6 +649,7 @@ export async function getDependencies(
       content: null,
       provenance: extractProvenance(pkg),
       score: 0.9,
+      repositoryName: pkg.repository?.name ?? null,
     })
   }
 
@@ -685,6 +690,7 @@ export async function getDependencies(
       content: null,
       provenance: extractProvenance(p),
       score: p.repository?.name === "npm" ? 0.5 : 0.6,
+      repositoryName: p.repository?.name ?? null,
     })
   }
 
@@ -812,6 +818,7 @@ export async function getDependents(
     content: null,
     provenance: extractProvenance(pkg),
     score: 0.9,
+    repositoryName: pkg.repository?.name ?? null,
   })
 
   const edges = await prisma.relationship.findMany({
@@ -844,6 +851,7 @@ export async function getDependents(
       content: null,
       provenance: extractProvenance(p),
       score: 0.8,
+      repositoryName: p.repository?.name ?? null,
     })
   }
 
@@ -1032,6 +1040,7 @@ export async function getDecisionViolations(): Promise<RetrievalResult> {
         content: null,
         provenance: extractProvenance(p),
         score: 1.0,
+        repositoryName: p.repository?.name ?? null,
       })
     }
   }
@@ -1158,6 +1167,7 @@ export async function getGovernedEntities(
       content: null,
       provenance: extractProvenance(p),
       score: 0.7,
+      repositoryName: p.repository?.name ?? null,
     })
   }
 
@@ -1312,7 +1322,7 @@ export function formatContext(result: RetrievalResult): string {
     lines.push("=== Documents ===")
     lines.push("")
     for (const d of result.documents) {
-      lines.push(`[Document] ${d.repositoryName}/${d.path}`)
+      lines.push(`[Document] ${d.repositoryName ?? "unnamed"}/${d.path}`)
       lines.push(`  provenance: ${formatProvenance(d.provenance)}`)
       if (d.content) {
         if (d.content.length > MAX_DOCUMENT_CHARS) {

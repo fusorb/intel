@@ -31,6 +31,7 @@ export type {
   ImportInfo,
   ExportInfo,
   ParseResult,
+  SymbolInsertResult,
   FileParser,
 } from "./parser.js"
 export { repositoryNameFromUrl, cloneOrFetch, currentCommit, defaultBranch, AGENT_REPOS } from "./git.js"

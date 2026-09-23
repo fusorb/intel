@@ -132,8 +132,13 @@ files), Intel extracts **symbol-level** declarations from every `.ts`/`.tsx` fil
 TypeScript compiler API parser (`packages/ingest/src/parser.ts`). The parser is wired into the
 ingestion pipeline: each source file is parsed and its symbols (functions, classes, consts, etc.)
 are upserted with full provenance. If the `typescript` package is not installed, symbol extraction
-is skipped gracefully. A file-count and file-size cap (`MAX_PARSED_FILES`, `MAX_SYMBOL_FILE_SIZE`)
-bounds the cost per ingestion run; `node_modules` and build output are excluded.
+is skipped gracefully. A file-count and file-size cap (`MAX_SYMBOL_FILES` = 300,
+`MAX_SYMBOL_FILE_SIZE` = 200_000 bytes) bounds the cost per ingestion run;
+`node_modules` and build output are excluded.
+
+Each ingestion run records how many files were parsed, skipped (size cap), and
+errored (parse failures). Parse errors and per-symbol database errors are surfaced
+as warnings — they never silently become `0 symbols`.
 
 ---
 

@@ -177,6 +177,9 @@ describe("re-ingestion idempotency", () => {
       documents: before.documents,
       consumesEdges: 88,
       containsEdges: 130,
+      symbolFilesParsed: 0,
+      symbolFilesSkipped: 0,
+      symbolFilesErrored: 0,
     })
 
     // Count after — entity counts should be unchanged (idempotent)
@@ -231,6 +234,9 @@ describe("IngestionRun lifecycle", () => {
       documents: 2,
       consumesEdges: 10,
       containsEdges: 8,
+      symbolFilesParsed: 0,
+      symbolFilesSkipped: 0,
+      symbolFilesErrored: 0,
     })
 
     const completedRun = await prisma.ingestionRun.findUnique({

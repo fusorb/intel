@@ -56,11 +56,15 @@ export async function ingestRepo(
   const extracted = extractRepo(dest)
 
   const errors: string[] = []
+  const warnings: string[] = []
   const inserted: InsertedPackage[] = []
   let packagesCount = 0
   let modulesCount = 0
   let documentsCount = 0
   let symbolsCount = 0
+  let symbolFilesParsed = 0
+  let symbolFilesSkipped = 0
+  let symbolFilesErrored = 0
   let consumesEdges = 0
   let containsEdges = 0
 
@@ -105,15 +109,43 @@ export async function ingestRepo(
   // Extract symbols from each TS/TSX source file.
   // Bounded by MAX_SYMBOL_FILES / MAX_SYMBOL_FILE_SIZE to keep ingestion cost predictable.
   const sourceFiles = collectSourceFiles(dest)
-  let parsedFiles = 0
   for (const sf of sourceFiles) {
-    if (parsedFiles >= MAX_SYMBOL_FILES) break
+    if (symbolFilesParsed + symbolFilesErrored >= MAX_SYMBOL_FILES) break
+    let fileSize: number
     try {
-      if (statSync(sf.abs).size > MAX_SYMBOL_FILE_SIZE) continue
-      const source = readFileSync(sf.abs, "utf-8")
-      symbolsCount += await linkSymbols(repoId, sf.rel, source, commitSha)
-      parsedFiles++
+      fileSize = statSync(sf.abs).size
     } catch (err) {
+      errors.push(
+        `symbol stat ${sf.rel}: ${err instanceof Error ? err.message : String(err)}`,
+      )
+      continue
+    }
+    if (fileSize > MAX_SYMBOL_FILE_SIZE) {
+      symbolFilesSkipped++
+      warnings.push(
+        `symbol skip (size ${fileSize}B > ${MAX_SYMBOL_FILE_SIZE}B): ${sf.rel}`,
+      )
+      continue
+    }
+    try {
+      const source = readFileSync(sf.abs, "utf-8")
+      const { count, errors: symErrors, parseFailed } = await linkSymbols(
+        repoId,
+        sf.rel,
+        source,
+        commitSha,
+      )
+      symbolsCount += count
+      if (parseFailed) {
+        symbolFilesErrored++
+      } else {
+        symbolFilesParsed++
+      }
+      if (symErrors.length > 0) {
+        warnings.push(...symErrors)
+      }
+    } catch (err) {
+      symbolFilesErrored++
       errors.push(
         `symbol ${sf.rel}: ${err instanceof Error ? err.message : String(err)}`,
       )
@@ -151,8 +183,12 @@ export async function ingestRepo(
       symbols: symbolsCount,
       consumesEdges,
       containsEdges,
+      symbolFilesParsed,
+      symbolFilesSkipped,
+      symbolFilesErrored,
     },
     errors.length > 0 ? errors : undefined,
+    warnings.length > 0 ? warnings : undefined,
   )
 
   return {
@@ -165,5 +201,9 @@ export async function ingestRepo(
     symbols: symbolsCount,
     consumesEdges,
     containsEdges,
+    symbolFilesParsed,
+    symbolFilesSkipped,
+    symbolFilesErrored,
+    warnings,
   }
 }
