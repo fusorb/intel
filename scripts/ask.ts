@@ -1,5 +1,5 @@
 import { retrieve, formatContext } from "@fusorb/intel-retrieval"
-import { createProvider, MockProvider } from "@fusorb/intel-provider"
+import { createProvider } from "@fusorb/intel-provider"
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs"
 import { resolve } from "node:path"
 
@@ -34,11 +34,9 @@ async function main(): Promise<void> {
 
   // Step 2: Generate — one provider call
   const provider = createProvider()
-  if (provider instanceof MockProvider) {
-    console.warn(
-      "Warning: ANTHROPIC_API_KEY is not set — using MockProvider (no answer generated).",
-    )
-  }
+  console.log(`Provider: ${provider.providerName}`)
+  console.log(`Model: ${provider.modelName}`)
+  console.log("")
   const answer = await provider.generate({ question, context: fullContext })
 
   // Step 3: Print — answer with citations
