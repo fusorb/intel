@@ -32,15 +32,15 @@ async function dependencyNames(repoName: string): Promise<string[]> {
 async function main(): Promise<void> {
   const facts: Fact[] = []
 
-  // Fact 1: SovGrant's manifests reference @arcevo/facet-* and NOT @fusorb/facet-*.
+  // Fact 1: SovGrant's manifests reference @fusorb/facet-* and NOT the retired @arcevo/facet-*.
   {
     const deps = await dependencyNames("sovgrant")
     const hasArcevo = deps.some((n) => /^@arcevo\/facet-/.test(n))
     const hasFusorbFacet = deps.some((n) => /^@fusorb\/facet/.test(n))
     facts.push({
-      name: "SovGrant references @arcevo/facet-* (not @fusorb/facet-*)",
-      passed: hasArcevo && !hasFusorbFacet,
-      detail: `@arcevo/facet-* present = ${hasArcevo}; @fusorb/facet-* present = ${hasFusorbFacet}`,
+      name: "SovGrant references @fusorb/facet-* (not @arcevo/facet-*)",
+      passed: hasFusorbFacet && !hasArcevo,
+      detail: `@fusorb/facet-* present = ${hasFusorbFacet}; @arcevo/facet-* present = ${hasArcevo}`,
     })
   }
 
@@ -60,7 +60,7 @@ async function main(): Promise<void> {
     })
   }
 
-  // Fact 3: Relnex depends on shadcn-related packages, not @fusorb/facet-components.
+  // Fact 3: Relnex depends on @fusorb/facet-components (the shadcn stack is retired).
   {
     const deps = await dependencyNames("relnex")
     const shadcnRelated = deps.filter(
@@ -69,9 +69,9 @@ async function main(): Promise<void> {
     const hasShadcn = shadcnRelated.length > 0
     const hasFusorbComponents = deps.includes("@fusorb/facet-components")
     facts.push({
-      name: "Relnex depends on shadcn-related packages (not @fusorb/facet-components)",
-      passed: hasShadcn && !hasFusorbComponents,
-      detail: `shadcn-related deps [${shadcnRelated.join(", ")}]; @fusorb/facet-components present = ${hasFusorbComponents}`,
+      name: "Relnex depends on @fusorb/facet-components (shadcn stack retired)",
+      passed: hasFusorbComponents && !hasShadcn,
+      detail: `@fusorb/facet-components present = ${hasFusorbComponents}; shadcn-related deps [${shadcnRelated.join(", ")}]`,
     })
   }
 

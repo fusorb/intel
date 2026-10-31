@@ -68,3 +68,8 @@ Thumbs.db
 # Local scratch, clones, logs, and tool-managed config (not project source)
 /.agent/
 /.commandcode/
+
+# Agent/user scratch and run artifacts
+/scratchpad/
+/test-output.txt
+vitest.config.ts.timestamp-*

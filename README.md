@@ -29,13 +29,13 @@ The Fusorb ecosystem is a collection of specialized, domain-owned repositories t
 independently. Naming drift, scope lag, and cross-repo architectural violations are real and
 common — for example:
 
-- Repos were renamed from Arc-names (ArcUI → Facet, ArcID → SovGrant, ArcBase → Relnex,
-  ArcWallet → SovPort) at the GitHub/org level, but **every internal document** still uses the
-  old names.
-- SovGrant's frontend still imports `@arcevo/facet-*` (the old npm scope) instead of
-  `@fusorb/facet-*` — a deliberate, roadmapped migration that hasn't completed yet.
-- Relnex builds its UI with shadcn/ui instead of `@fusorb/facet-*`, violating the stated ecosystem
-  invariant that Facet is the single mandatory UI system.
+- Repos were renamed from Arc-names (ArcUI -> Facet, ArcID -> SovGrant, ArcBase -> Relnex,
+  ArcWallet -> SovPort) at the GitHub/org level, and some internal references still lag - for
+  example SovGrant's planning docs and `CLAUDE.md` still name the wallet `ArcWallet`, and a
+  config key still reads `arcbaseWebhookUrl`.
+- Two migrations that once defined the drift have since landed: SovGrant's frontend and Relnex's
+  UI now consume `@fusorb/facet-*` rather than `@arcevo/facet-*` and shadcn. The ecosystem still
+  needs a system that can prove which cross-repo claims are current and which have drifted.
 
 Intel exists to catch exactly this kind of drift — and to make honest, citable, time-aware
 statements about it, rather than guessing.
@@ -93,10 +93,10 @@ Every fact-bearing row carries these provenance fields:
   - `unknown` — not yet assessed
 - **`removedAt`** — soft-delete timestamp; set when a re-ingest no longer finds the entity
 
-This means two documents that disagree (e.g., SovGrant's README says 342 tests, its v2 roadmap says
-358, and SovPort's integration plan cites 326 from an older `.agent/output.txt`) are **all recorded
-with their timestamps**, not collapsed into a single "current" number. The graph answers "as of
-2026-09-01, per the v2 roadmap: 358" rather than guessing.
+This means two documents that disagree (e.g., SovGrant's README, its v2 roadmap, and SovPort's
+integration plan each cite a different test count from a different date) are **all recorded with
+their timestamps**, not collapsed into a single "current" number. The graph answers "as of <date>,
+per <document>: <count>" rather than guessing.
 
 ### Ingestion pipeline
 
@@ -275,16 +275,16 @@ pnpm verify
 
 This throwaway script (`scripts/verify.ts`) asserts three facts from real data:
 
-1. SovGrant's manifests reference `@arcevo/facet-*` (not `@fusorb/facet-*`).
+1. SovGrant's manifests reference `@fusorb/facet-*` (not `@arcevo/facet-*`).
 2. Facet ships Package entities for `packages/motion`, `packages/native`, and `packages/sandbox`.
-3. Relnex depends on shadcn-related packages (not `@fusorb/facet-components`).
+3. Relnex depends on `@fusorb/facet-components` (the shadcn stack is retired).
 
 ### Asking questions
 
 Intel answers natural-language questions about the graph end-to-end through retrieval + provider:
 
 ```bash
-pnpm ask "Why does SovGrant's frontend import @arcevo/facet-sdk instead of @fusorb/facet-sdk?"
+pnpm ask "Which repositories still reference @arcevo/facet-sdk?"
 ```
 
 `scripts/ask.ts` performs a single retrieval pass over the graph, formats the results with
@@ -334,10 +334,10 @@ Intel ingests these four product repositories:
 
 | Repo | Role | Current state |
 |---|---|---|
-| **[facet](https://github.com/fusorb/facet)** | Domain-customizable, auth-first UI component system | Mature — 12 packages, 114 components, the canonical UI layer for the ecosystem |
-| **[sovgrant](https://github.com/fusorb/sovgrant)** | Sovereign, multi-tenant identity/access/credentials engine | v1 complete — full OAuth2, SD-JWT, SAML/OIDC federation, 19 permissions |
-| **[relnex](https://github.com/fusorb/relnex)** | Knowledge-graph content management | Early/mid — rebuild in progress, auth fully delegated to SovGrant |
-| **[sovport](https://github.com/fusorb/sovport)** | Self-sovereign identity wallet (credential holder) | Pre-integration scaffold — fully specified 4-phase plan against SovGrant's SDK |
+| **[facet](https://github.com/fusorb/facet)** | Domain-customizable, auth-first UI component system | Mature - the canonical UI layer for the ecosystem |
+| **[sovgrant](https://github.com/fusorb/sovgrant)** | Sovereign, multi-tenant identity/access/credentials engine | Backend implemented; frontend on the published Facet packages |
+| **[relnex](https://github.com/fusorb/relnex)** | Knowledge-graph content management | Migrated to the Facet packages; development paused while SovGrant stabilizes |
+| **[sovport](https://github.com/fusorb/sovport)** | Self-sovereign identity wallet (credential holder) | Integration in progress against the SovGrant SDK |
 
 ### What Intel ingests from each
 
@@ -353,18 +353,18 @@ Intel ingests these four product repositories:
 
 Because every fact carries its commit SHA and timestamp, Intel can answer questions like:
 
-- *"Why does SovGrant import `@arcevo/facet-sdk` instead of `@fusorb/facet-sdk`?"*
-  → SovGrant's `package.json` shows `@arcevo/facet-sdk` as a dependency. The discrepancy is real,
-  deliberate, and roadmapped — but Intel cannot answer *why* the npm-org namespace is blocked,
-  because no ingested document states the reason. It would correctly report that as `unknown`.
+- *"Which repositories still reference `@arcevo/facet-sdk`?"*
+  -> The npm-scope migration is complete: SovGrant and Relnex resolve `@fusorb/facet-*`. Intel can
+  still answer the historical question with the commit where the switch happened, and reports
+  `unknown` for any repo it has not ingested.
 - *"How many tests does SovGrant have?"*
-  → Intel surfaces **all** numbers with their dates: 358 (as of 2026-09-01, per the v2 roadmap),
-  342 (per the README), 326 (as of 2026-08-05, per SovPort's integration plan). A single-snapshot
-  answer would be wrong; the graph captures the full picture.
+  -> Intel surfaces **all** numbers with their dates, one per source (the README, the v2 roadmap,
+  and SovPort's integration plan). A single-snapshot answer would be wrong; the graph captures
+  the full picture.
 - *"Does Relnex use Facet for its UI?"*
-  → Relnex's dependencies include shadcn-related packages (`@radix-ui/*`, `lucide-react`,
-  `clsx`, `tailwind-merge`) and do **not** include `@fusorb/facet-components`. This is a verified
-  violation of the "Facet is the only UI system" architectural decision.
+  -> Relnex's dependencies now include `@fusorb/facet-components`; the earlier shadcn stack has
+  been retired. This is a verified satisfaction of the "Facet is the only UI system" decision,
+  with the commit that made the switch recorded in the graph.
 
 ---
 

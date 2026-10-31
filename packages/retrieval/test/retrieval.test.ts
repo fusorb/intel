@@ -9,8 +9,8 @@ import {
 
 describe("extractKeywords", () => {
   it("extracts scoped package names", () => {
-    const keywords = extractKeywords("Does SovGrant depend on @arcevo/facet-sdk?")
-    expect(keywords).toContain("@arcevo/facet-sdk")
+    const keywords = extractKeywords("Does SovGrant depend on @fusorb/facet-sdk?")
+    expect(keywords).toContain("@fusorb/facet-sdk")
     expect(keywords).toContain("sovgrant")
     expect(keywords).toContain("depend")
   })
