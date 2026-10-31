@@ -18,7 +18,7 @@ function asRecord(v: unknown): Record<string, unknown> | null {
 /** Collect every dependency + devDependency name declared by a repository's packages. */
 async function dependencyNames(repoName: string): Promise<string[]> {
   const rows = await prisma.package.findMany({
-    where: { repository: { name: repoName } },
+    where: { repository: { name: repoName }, removedAt: null },
     select: { dependencies: true, devDependencies: true },
   })
   const names: string[] = []
@@ -47,7 +47,7 @@ async function main(): Promise<void> {
   // Fact 2: Facet ships packages/ motion, native, sandbox as Package entities.
   {
     const packages = await prisma.package.findMany({
-      where: { repository: { name: "facet" } },
+      where: { repository: { name: "facet" }, removedAt: null },
       select: { sourcePath: true, name: true },
     })
     const has = (segment: string) =>

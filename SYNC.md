@@ -20,9 +20,28 @@ Last checked: 2026-10-31, against fusorb `424e31c`.
 - `.gitignore`: `/scratchpad/`, `/test-output.txt`, and
   `vitest.config.ts.timestamp-*` are now ignored.
 
+## Graph refreshed 2026-10-31
+
+Re-ingested all four product repos onto their latest commits and re-verified.
+
+| Repo | Commit | Packages | Modules | Symbols | Documents |
+|---|---|---|---|---|---|
+| facet | `30a29238` | 18 | 46 | 3866 | 36 |
+| sovgrant | `94de8d2f` | 2 | 125 | 2135 | 10 |
+| relnex | `c053e856` | 2 | 75 | 1117 | 5 |
+| sovport | `36d99ff2` | 1 | 9 | 209 | 8 |
+
+`pnpm -r typecheck`, `pnpm -r build`, and `pnpm test:run` (109 passed, 2
+ollama-integration skipped) all pass; `pnpm verify` reports 3/3.
+
+- `scripts/verify.ts`: the acceptance query now filters `removedAt: null`, so
+  soft-deleted legacy rows (`arc-id`, `arcbase`, from the pre-migration commits)
+  no longer leak retired `@arcevo/*` / shadcn deps into the facts. This mirrors
+  the `removedAt: null` filtering already used throughout `packages/retrieval`.
+
 ## Outstanding for this repo
 
 - Naming: none outstanding. The remaining `arc*` / `@arcevo` strings are
   deliberate history or examples, not un-migrated code.
-- Once the product repos' latest commits are pushed, re-run `pnpm ingest:all`
-  and `pnpm verify` so the graph reflects them.
+- Commit the `scripts/verify.ts` soft-delete fix and this ledger update.
+
