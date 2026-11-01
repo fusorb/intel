@@ -14,12 +14,19 @@ export {
   upsertDocument,
   linkContains,
   linkConsumes,
+  linkGoverns,
+  linkViolates,
+  upsertDecision,
   syncPackageConsumes,
   startIngestionRun,
   completeIngestionRun,
   provenance,
 } from "./graph.js"
-export type { ProvLevel, ProvSourceType, ProvenanceFields } from "./graph.js"
+export type { ProvLevel, ProvSourceType, ProvenanceFields, DecisionUpsertInput } from "./graph.js"
+export { runGovernance, detectViolations } from "./governance.js"
+export type { GovernanceSummary } from "./governance.js"
+export { ECOSYSTEM_DECISIONS } from "./decisions.js"
+export type { DecisionSeed, DecisionTarget } from "./decisions.js"
 export {
   parseTypeScriptFile,
   parseFile,

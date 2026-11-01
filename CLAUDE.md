@@ -28,6 +28,10 @@ This repo is **Tier-1 infra**. It is not a product that ships to end users.
 - **Provider**: `packages/provider` — `IntelligenceProvider` interface + Anthropic implementation.
 - **Tools**: `packages/tools` — read-only tool surface (`searchRepo`, `readDocument`,
   `inspectDependencies`).
+- **Governance**: `packages/ingest` also holds the authored `Decision` seed
+  (`decisions.ts`) and the governance engine (`governance.ts`) — `runGovernance()` upserts
+  decisions by stable `key`, writes `GOVERNS` edges, and detects `VIOLATES` edges. Run it
+  with `pnpm seed:governance`.
 
 ## Still deferred
 
@@ -55,6 +59,9 @@ pnpm ingest:all
 
 # 5. Verify the three acceptance facts
 pnpm verify
+
+# 6. Seed the authored decisions + governance edges
+pnpm seed:governance
 ```
 
 ## Key files
@@ -107,3 +114,4 @@ pnpm verify
 | `pnpm ingest <url> [--branch <branch>]` | Ingest a single repo |
 | `pnpm ingest:all` | Ingest all 4 repos (facet, sovgrant, relnex, sovport) |
 | `pnpm verify` | Run the throwaway verification script (3 acceptance facts) |
+| `pnpm seed:governance` | Seed authored decisions and (re)compute GOVERNS/VIOLATES edges |

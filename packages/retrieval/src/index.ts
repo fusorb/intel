@@ -1148,27 +1148,75 @@ export async function getGovernedEntities(
 
   if (governed.length === 0) return result
 
-  const targetIds = governed.map((g) => g.toEntityId)
   const refs: EntityRef[] = []
+  const idsOfType = (type: string): string[] =>
+    governed.filter((g) => g.toEntityType === type).map((g) => g.toEntityId)
 
   // Resolve target packages
-  const pkgs = await prisma.package.findMany({
-    where: { id: { in: targetIds } },
-    include: { repository: true },
-  })
-  for (const p of pkgs) {
-    refs.push({ id: p.id, type: "PACKAGE" })
-    result.entities.push({
-      entityType: "PACKAGE",
-      id: p.id,
-      name: p.name,
-      path: p.sourcePath,
-      description: p.description,
-      content: null,
-      provenance: extractProvenance(p),
-      score: 0.7,
-      repositoryName: p.repository?.name ?? null,
+  const pkgIds = idsOfType("PACKAGE")
+  if (pkgIds.length > 0) {
+    const pkgs = await prisma.package.findMany({
+      where: { id: { in: pkgIds } },
+      include: { repository: true },
     })
+    for (const p of pkgs) {
+      refs.push({ id: p.id, type: "PACKAGE" })
+      result.entities.push({
+        entityType: "PACKAGE",
+        id: p.id,
+        name: p.name,
+        path: p.sourcePath,
+        description: p.description,
+        content: null,
+        provenance: extractProvenance(p),
+        score: 0.7,
+        repositoryName: p.repository?.name ?? null,
+      })
+    }
+  }
+
+  // Resolve target repositories (the common case for ecosystem-level decisions)
+  const repoIds = idsOfType("REPOSITORY")
+  if (repoIds.length > 0) {
+    const repos = await prisma.repository.findMany({
+      where: { id: { in: repoIds } },
+    })
+    for (const r of repos) {
+      refs.push({ id: r.id, type: "REPOSITORY" })
+      result.entities.push({
+        entityType: "REPOSITORY",
+        id: r.id,
+        name: r.name,
+        path: r.name,
+        description: r.url ?? null,
+        content: null,
+        provenance: extractProvenance(r),
+        score: 0.7,
+      })
+    }
+  }
+
+  // Resolve target modules
+  const modIds = idsOfType("MODULE")
+  if (modIds.length > 0) {
+    const mods = await prisma.module.findMany({
+      where: { id: { in: modIds } },
+      include: { repository: true },
+    })
+    for (const m of mods) {
+      refs.push({ id: m.id, type: "MODULE" })
+      result.entities.push({
+        entityType: "MODULE",
+        id: m.id,
+        name: m.name,
+        path: m.path,
+        description: m.description,
+        content: null,
+        provenance: extractProvenance(m),
+        score: 0.7,
+        repositoryName: m.repository?.name ?? null,
+      })
+    }
   }
 
   const nameMap = await resolveEntityNames(refs)

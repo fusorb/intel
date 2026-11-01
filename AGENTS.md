@@ -9,10 +9,12 @@ plus a polymorphic Relationship join table. Every row carries full provenance
 
 The `Decision` entity captures architectural rules and invariants (e.g. "Facet is the single
 mandatory UI system across the ecosystem"). Unlike the other five, `Decision` rows are **not**
-extracted by ingestion — they are written by a human (or an agent with review). Their
-`sourceType` will almost always be `human_statement`, since they typically originate from
-conversation or judgment rather than from a file. Relationship kinds `GOVERNS` and `VIOLATES`
-link Decisions to the entities they govern and the entities that currently violate them.
+extracted by ingestion — they are authored as committed seed data in
+`packages/ingest/src/decisions.ts` and written to the graph by `runGovernance()`
+(`pnpm seed:governance`). Their `sourceType` is `human_statement`, since they originate from
+the ecosystem's standards rather than from an ingested file. Relationship kinds `GOVERNS` and
+`VIOLATES` link Decisions to the entities they govern: `GOVERNS` edges are seeded alongside the
+decisions, and `VIOLATES` edges are detected from the live graph.
 
 ## Tech stack
 
@@ -37,7 +39,9 @@ fusorb/intel
 │   ├── ingest/                # Repo cloning, file-tree walking, entity extraction, CLI
 │   │   └── src/
 │   │       ├── cli.ts
+│   │       ├── decisions.ts   # Authored Decision seed data (ecosystem invariants)
 │   │       ├── extract.ts
+│   │       ├── governance.ts  # runGovernance(): seed decisions, write GOVERNS/VIOLATES
 │   │       ├── graph.ts
 │   │       ├── git.ts
 │   │       ├── ingest.ts
@@ -77,6 +81,7 @@ pnpm prisma:push
 4. `pnpm -r build` — must pass (tsup builds each package).
 5. If you changed `schemas/graph.prisma`: `pnpm prisma:push` (or `pnpm prisma:generate` if only types changed).
 6. Re-ingest repos after code changes: `pnpm ingest:all`.
+7. Re-seed decisions and governance after ingest or seed changes: `pnpm seed:governance`.
 
 ## Conventions to follow
 
@@ -106,6 +111,20 @@ pnpm ingest https://github.com/fusorb/sovgrant.git --branch main
 ```
 
 Repos are cloned to `.agent/repos/<name>/` (gitignored). Re-running fetches + resets to HEAD.
+
+### Seed decisions and governance
+
+Decisions are authored, not ingested. Edit the committed seed
+(`packages/ingest/src/decisions.ts`) then run:
+
+```bash
+pnpm seed:governance
+```
+
+`runGovernance()` upserts each decision by its stable `key`, writes a `GOVERNS` edge to every
+Repository/Package/Module it governs, then detects `VIOLATES` edges (retired `@arcevo/*` scope,
+shadcn-style UI deps, missing `AGENTS.md`/`CLAUDE.md`). It is idempotent and clears violations
+that no longer hold — re-run it after `pnpm ingest:all`.
 
 ### Query the graph manually
 

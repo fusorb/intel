@@ -5,6 +5,7 @@ import {
   getDependencies,
   getPackageDependencies,
   getDecisionViolations,
+  getActiveDecisions,
   getGovernedEntities,
   traverseRelationships,
 } from "@fusorb/intel-retrieval"
@@ -86,10 +87,10 @@ describe("getDependencies", () => {
 describe("getPackageDependencies", () => {
   it("returns dependencies for a specific package", () => {
     if (!hasDb) return
-    return getPackageDependencies("sovgrant", "arc-id").then((pkg) => {
+    return getPackageDependencies("sovgrant", "sovgrant").then((pkg) => {
       expect(pkg).not.toBeNull()
       expect(pkg!.repositoryName).toBe("sovgrant")
-      expect(pkg!.packageName).toBe("arc-id")
+      expect(pkg!.packageName).toBe("sovgrant")
       expect(pkg!.dependencies.length).toBeGreaterThan(0)
       const depWithType = pkg!.dependencies.find((d) => d.depType === "dependency")
       expect(depWithType).toBeDefined()
@@ -116,14 +117,39 @@ describe("getGovernedEntities", () => {
       expect(result.entities.length).toBe(0)
     })
   })
+
+  it("resolves repository targets for seeded decisions", async () => {
+    if (!hasDb) return
+    const decisions = await getActiveDecisions()
+    if (decisions.length === 0) return // governance not seeded in this database
+
+    let sawRepoEdge = false
+    for (const d of decisions) {
+      const result = await getGovernedEntities(d.id)
+      for (const rel of result.relationships) {
+        if (rel.kind === "GOVERNS" && rel.toType === "REPOSITORY") {
+          sawRepoEdge = true
+          expect(rel.toName).toBeTruthy()
+          // The governed repository must be resolved as an entity, not left as a raw id
+          expect(
+            result.entities.some(
+              (e) => e.id === rel.toId && e.entityType === "REPOSITORY",
+            ),
+          ).toBe(true)
+        }
+      }
+    }
+    // The seeded UI invariant governs repositories (sovgrant, relnex)
+    expect(sawRepoEdge).toBe(true)
+  })
 })
 
 describe("traverseRelationships", () => {
   it("traverses CONSUMES edges from a package", () => {
     if (!hasDb) return
-    // First find the package "arc-id" to get its database ID
-    return searchPackage("arc-id").then((entities) => {
-      const match = entities.find((e) => e.name === "arc-id")
+    // First find the package "sovgrant" to get its database ID
+    return searchPackage("sovgrant").then((entities) => {
+      const match = entities.find((e) => e.name === "sovgrant")
       expect(match).toBeDefined()
       return traverseRelationships(match!.id, "PACKAGE" as never, ["CONSUMES" as never])
     }).then((results) => {

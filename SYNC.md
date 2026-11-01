@@ -38,6 +38,11 @@ ollama-integration skipped) all pass; `pnpm verify` reports 3/3.
   soft-deleted legacy rows (`arc-id`, `arcbase`, from the pre-migration commits)
   no longer leak retired `@arcevo/*` / shadcn deps into the facts. This mirrors
   the `removedAt: null` filtering already used throughout `packages/retrieval`.
+- Governance is now populated: `Decision` gained a unique `key` and
+  `pnpm seed:governance` writes the six ecosystem invariants
+  (`packages/ingest/src/decisions.ts`) with their `GOVERNS` edges, then detects
+  `VIOLATES` edges (retired `@arcevo/*` scope, shadcn-style UI deps, missing
+  `AGENTS.md`/`CLAUDE.md`). Idempotent; re-run after `pnpm ingest:all`.
 
 ## Outstanding for this repo
 

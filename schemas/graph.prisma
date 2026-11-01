@@ -191,6 +191,7 @@ model Document {
 /// from a file. sourceType will almost always be `human_statement` here.
 model Decision {
   id              String        @id @default(cuid())
+  key             String        @unique // stable slug for idempotent seeding, e.g. "ui-invariant-facet"
   title           String
   statement       String        // the rule itself, in plain language
   status          String        @default("active") // active | superseded | deferred

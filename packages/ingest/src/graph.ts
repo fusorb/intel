@@ -286,6 +286,109 @@ export async function linkConsumes(
   })
 }
 
+// --- Decisions / governance ---
+
+export interface DecisionUpsertInput {
+  key: string
+  title: string
+  statement: string
+  status: string
+  sourcePath: string
+  sourceCommitSha: string | null
+}
+
+/**
+ * Upsert a Decision by its stable `key`. Decisions are authored (never ingested),
+ * so provenance is `verified` / `human_statement`. Decision has no `removedAt`;
+ * lifecycle is carried by `status`.
+ */
+export async function upsertDecision(input: DecisionUpsertInput): Promise<string> {
+  const prov = provenance(input.sourcePath, input.sourceCommitSha, "verified", "human_statement")
+  const row = await prisma.decision.upsert({
+    where: { key: input.key },
+    create: {
+      key: input.key,
+      title: input.title,
+      statement: input.statement,
+      status: input.status,
+      ...prov,
+    },
+    update: {
+      title: input.title,
+      statement: input.statement,
+      status: input.status,
+      ...prov,
+    },
+  })
+  return row.id
+}
+
+/** Upsert a GOVERNS edge from a Decision to a Repository/Package/Module it governs. */
+export async function linkGoverns(
+  decisionId: string,
+  targetId: string,
+  targetType: "REPOSITORY" | "PACKAGE" | "MODULE",
+  note: string | null,
+  sourcePath: string,
+  commitSha: string | null,
+): Promise<void> {
+  const prov = provenance(sourcePath, commitSha, "verified", "human_statement")
+  await prisma.relationship.upsert({
+    where: {
+      fromEntityId_toEntityId_fromEntityType_toEntityType_kind: {
+        fromEntityId: decisionId,
+        toEntityId: targetId,
+        fromEntityType: "DECISION",
+        toEntityType: targetType,
+        kind: "GOVERNS",
+      },
+    },
+    create: {
+      fromEntityId: decisionId,
+      toEntityId: targetId,
+      fromEntityType: "DECISION",
+      toEntityType: targetType,
+      kind: "GOVERNS",
+      note,
+      ...prov,
+    },
+    update: { note, ...prov, removedAt: null },
+  })
+}
+
+/** Upsert a VIOLATES edge from a detected offending entity to the Decision it breaks. */
+export async function linkViolates(
+  sourceId: string,
+  sourceType: "REPOSITORY" | "PACKAGE" | "MODULE",
+  decisionId: string,
+  note: string | null,
+  sourcePath: string,
+  commitSha: string | null,
+): Promise<void> {
+  const prov = provenance(sourcePath, commitSha, "inferred", "file")
+  await prisma.relationship.upsert({
+    where: {
+      fromEntityId_toEntityId_fromEntityType_toEntityType_kind: {
+        fromEntityId: sourceId,
+        toEntityId: decisionId,
+        fromEntityType: sourceType,
+        toEntityType: "DECISION",
+        kind: "VIOLATES",
+      },
+    },
+    create: {
+      fromEntityId: sourceId,
+      toEntityId: decisionId,
+      fromEntityType: sourceType,
+      toEntityType: "DECISION",
+      kind: "VIOLATES",
+      note,
+      ...prov,
+    },
+    update: { note, ...prov, removedAt: null },
+  })
+}
+
 /**
  * For every dependency/devDependency/peerDependency/optionalDependency of a
  * package, upsert a CONSUMES edge whose target is either the ingested package

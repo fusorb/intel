@@ -100,18 +100,24 @@ describe("Acceptance Suite", () => {
   })
 
   // 5. What architectural decisions are currently represented?
-  skipIfNoDb("Q5: decisions are queryable (no LLM)", async () => {
+  skipIfNoDb("Q5: seeded decisions are queryable (no LLM)", async () => {
     const decisions = await getActiveDecisions()
-    // Currently no decisions have been authored — should return empty
+    // Ecosystem decisions are seeded via `pnpm seed:governance`.
     expect(Array.isArray(decisions)).toBe(true)
-    expect(decisions.length).toBe(0)
+    expect(decisions.length).toBeGreaterThanOrEqual(1)
+    const titles = decisions.map((d) => d.name)
+    expect(titles).toContain("Facet is the single mandatory UI system")
   })
 
   // 6. Which entities violate active decisions?
   skipIfNoDb("Q6: violations are queryable (no LLM)", async () => {
     const result = await getDecisionViolations()
-    expect(result.entities.length).toBe(0)
-    expect(result.relationships.length).toBe(0)
+    expect(Array.isArray(result.entities)).toBe(true)
+    // Every returned edge must be a VIOLATES edge into a Decision.
+    for (const rel of result.relationships) {
+      expect(rel.kind).toBe("VIOLATES")
+      expect(rel.toType).toBe("DECISION")
+    }
   })
 
   // 7. Where was a particular dependency observed?
@@ -150,13 +156,15 @@ describe("Acceptance Suite", () => {
   })
 
   // 10. Can Intel correctly answer "I don't know" when evidence is absent?
-  skipIfNoDb("Q10: retrieve returns empty for nonsense query (no LLM)", async () => {
+  skipIfNoDb("Q10: retrieve matches no real entity for nonsense query (no LLM)", async () => {
     const result = await retrieve(
       "flibbertigibbet xylophone zoonooby quixotic",
       { limit: 5 },
     )
-    // Nonsense keywords should yield zero matches
-    expect(result.entities.length).toBe(0)
+    // Active decisions are always merged into every result, so exclude them:
+    // nonsense keywords must not match any real entity (repo/package/module/document).
+    const matched = result.entities.filter((e) => e.entityType !== "DECISION")
+    expect(matched.length).toBe(0)
     expect(result.relationships.length).toBe(0)
   })
 

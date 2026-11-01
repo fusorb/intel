@@ -21,6 +21,11 @@ beforeAll(() => {
 interface RepoSnapshot {
   id: string
   pkgIds: string[]
+  moduleIds: string[]
+  documentIds: string[]
+  symbolIds: string[]
+  containsRelIds: string[]
+  consumesRelIds: string[]
 }
 async function snapshotRepo(repoName: string): Promise<RepoSnapshot | null> {
   const repo = await prisma.repository.findFirst({
@@ -28,33 +33,45 @@ async function snapshotRepo(repoName: string): Promise<RepoSnapshot | null> {
     select: { id: true },
   })
   if (!repo) return null
-  const pkgs = await prisma.package.findMany({
-    where: { repositoryId: repo.id },
+
+  // Capture only the ids that are ACTIVE now. Restoring only these keeps
+  // already-soft-deleted legacy rows (e.g. renamed packages) stale, so the
+  // snapshot cycle neither resurrects them nor corrupts the graph.
+  const [pkgs, mods, docs, syms, contains] = await Promise.all([
+    prisma.package.findMany({ where: { repositoryId: repo.id, removedAt: null }, select: { id: true } }),
+    prisma.module.findMany({ where: { repositoryId: repo.id, removedAt: null }, select: { id: true } }),
+    prisma.document.findMany({ where: { repositoryId: repo.id, removedAt: null }, select: { id: true } }),
+    prisma.symbol.findMany({ where: { repositoryId: repo.id, removedAt: null }, select: { id: true } }),
+    prisma.relationship.findMany({
+      where: { fromEntityId: repo.id, fromEntityType: "REPOSITORY", kind: "CONTAINS", removedAt: null },
+      select: { id: true },
+    }),
+  ])
+  const pkgIds = pkgs.map((p) => p.id)
+  const consumes = await prisma.relationship.findMany({
+    where: { fromEntityId: { in: pkgIds }, fromEntityType: "PACKAGE", kind: "CONSUMES", removedAt: null },
     select: { id: true },
   })
-  return { id: repo.id, pkgIds: pkgs.map((p) => p.id) }
+
+  return {
+    id: repo.id,
+    pkgIds,
+    moduleIds: mods.map((m) => m.id),
+    documentIds: docs.map((d) => d.id),
+    symbolIds: syms.map((s) => s.id),
+    containsRelIds: contains.map((r) => r.id),
+    consumesRelIds: consumes.map((r) => r.id),
+  }
 }
 
-/** Restore all entities and relationships for a repository to active state. */
+/** Restore exactly the entities and relationships captured by snapshotRepo. */
 async function restoreRepo(snap: RepoSnapshot): Promise<void> {
-  const { id, pkgIds } = snap
-  await prisma.package.updateMany({ where: { repositoryId: id }, data: { removedAt: null } })
-  await prisma.module.updateMany({ where: { repositoryId: id }, data: { removedAt: null } })
-  await prisma.document.updateMany({ where: { repositoryId: id }, data: { removedAt: null } })
-  await prisma.relationship.updateMany({
-    where: { fromEntityId: id, fromEntityType: "REPOSITORY", kind: "CONTAINS" },
-    data: { removedAt: null },
-  })
-  if (pkgIds.length > 0) {
-    await prisma.relationship.updateMany({
-      where: {
-        fromEntityId: { in: pkgIds },
-        fromEntityType: "PACKAGE",
-        kind: "CONSUMES",
-      },
-      data: { removedAt: null },
-    })
-  }
+  await prisma.package.updateMany({ where: { id: { in: snap.pkgIds } }, data: { removedAt: null } })
+  await prisma.module.updateMany({ where: { id: { in: snap.moduleIds } }, data: { removedAt: null } })
+  await prisma.document.updateMany({ where: { id: { in: snap.documentIds } }, data: { removedAt: null } })
+  await prisma.symbol.updateMany({ where: { id: { in: snap.symbolIds } }, data: { removedAt: null } })
+  await prisma.relationship.updateMany({ where: { id: { in: snap.containsRelIds } }, data: { removedAt: null } })
+  await prisma.relationship.updateMany({ where: { id: { in: snap.consumesRelIds } }, data: { removedAt: null } })
 }
 
 describe("markStale marks relationships stale", () => {
@@ -82,6 +99,15 @@ describe("markStale marks relationships stale", () => {
     })
     expect(beforeContains).toBeGreaterThan(0)
 
+    const staleContainsBefore = await prisma.relationship.count({
+      where: {
+        fromEntityId: sovgrantSnap.id,
+        fromEntityType: "REPOSITORY",
+        kind: "CONTAINS",
+        removedAt: { not: null },
+      },
+    })
+
     await markStale(sovgrantSnap.id)
 
     const afterStale = await prisma.relationship.count({
@@ -94,7 +120,8 @@ describe("markStale marks relationships stale", () => {
     })
     expect(afterStale).toBe(0)
 
-    // Verify they're soft-deleted, not hard-deleted
+    // Verify they're soft-deleted, not hard-deleted. Prior ingests may already
+    // have left stale CONTAINS edges, so assert the delta, not the total.
     const afterRemoved = await prisma.relationship.count({
       where: {
         fromEntityId: sovgrantSnap.id,
@@ -103,7 +130,7 @@ describe("markStale marks relationships stale", () => {
         removedAt: { not: null },
       },
     })
-    expect(afterRemoved).toBe(beforeContains)
+    expect(afterRemoved).toBe(staleContainsBefore + beforeContains)
   })
 
   it("marks CONSUMES relationships as stale for a repository's packages", async () => {
@@ -118,6 +145,15 @@ describe("markStale marks relationships stale", () => {
       },
     })
     expect(beforeConsumes).toBeGreaterThan(0)
+
+    const staleConsumesBefore = await prisma.relationship.count({
+      where: {
+        fromEntityId: { in: sovgrantSnap.pkgIds },
+        fromEntityType: "PACKAGE",
+        kind: "CONSUMES",
+        removedAt: { not: null },
+      },
+    })
 
     await markStale(sovgrantSnap.id)
 
@@ -140,7 +176,7 @@ describe("markStale marks relationships stale", () => {
         removedAt: { not: null },
       },
     })
-    expect(afterRemoved).toBe(beforeConsumes)
+    expect(afterRemoved).toBe(staleConsumesBefore + beforeConsumes)
   })
 })
 
