@@ -312,6 +312,22 @@ the provider runs a post-generation check that flags unsourced claims or citatio
 previous retrieval's context (`.agent/ask-context.txt`), so you can ask "When was that fact last
 confirmed?" and get a time-aware answer.
 
+### Providers
+
+Intel talks to any OpenAI-compatible chat API. Set `INTEL_PROVIDER` plus the matching
+variables (see `.env.example`):
+
+| Provider | Variables | Notes |
+|---|---|---|
+| `mock` | — | Deterministic, no network. The default; what CI uses. |
+| `anthropic` | `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL`, `ANTHROPIC_TIMEOUT_MS` | Hosted Claude. |
+| `ollama` | `OLLAMA_BASE_URL`, `OLLAMA_MODEL`, `OLLAMA_TIMEOUT_MS` | Local; free. |
+| `openrouter` | `OPENROUTER_API_KEY`, `OPENROUTER_MODEL`, `OPENROUTER_BASE_URL`, `OPENROUTER_TIMEOUT_MS` | Aggregator. |
+| `openai` | `OPENAI_API_KEY`, `OPENAI_MODEL`, `OPENAI_BASE_URL`, `OPENAI_TIMEOUT_MS` | Generic OpenAI-compatible. Point `OPENAI_BASE_URL` at Groq, Cerebras, Mistral, Gemini, GitHub Models, Cloudflare Workers AI, or a local server (LM Studio, llama.cpp, vLLM, Ollama's own `/v1`). `OPENAI_API_KEY` is optional — local servers need none. |
+
+Free options for exercising the full `ask` path: a smaller local Ollama model, or a hosted
+OpenAI-compatible free tier (Groq, Cerebras, Gemini, GitHub Models) via `INTEL_PROVIDER=openai`.
+
 ---
 
 ## Development workflow

@@ -5,6 +5,7 @@ import { MockProvider } from "./mock.js"
 import { AnthropicProvider } from "./anthropic.js"
 import { OllamaProvider } from "./ollama.js"
 import { OpenRouterProvider } from "./openrouter.js"
+import { OpenAIProvider } from "./openai.js"
 
 /** Default provider when INTEL_PROVIDER is unset. Safe — no external calls. */
 export const DEFAULT_PROVIDER = "mock"
@@ -15,6 +16,7 @@ export const VALID_PROVIDERS = [
   "anthropic",
   "ollama",
   "openrouter",
+  "openai",
 ] as const
 
 /** Thrown when the provider config is missing or invalid. */
@@ -88,6 +90,27 @@ export function createProvider(): IntelligenceProvider {
         baseUrl: process.env.OPENROUTER_BASE_URL,
         timeoutMs: process.env.OPENROUTER_TIMEOUT_MS
           ? Number(process.env.OPENROUTER_TIMEOUT_MS)
+          : undefined,
+      })
+    }
+
+    case "openai": {
+      const model = process.env.OPENAI_MODEL
+      if (!model) {
+        throw new ProviderConfigurationError(
+          "INTEL_PROVIDER=openai but OPENAI_MODEL is not set. " +
+            "Set OPENAI_MODEL in your .env (e.g. OPENAI_MODEL=gpt-4o-mini). " +
+            "Point OPENAI_BASE_URL at any OpenAI-compatible endpoint (Groq, " +
+            "Gemini, GitHub Models, LM Studio, Ollama /v1, ...) and set " +
+            "OPENAI_API_KEY only if that endpoint requires one.",
+        )
+      }
+      return new OpenAIProvider({
+        apiKey: process.env.OPENAI_API_KEY,
+        model,
+        baseUrl: process.env.OPENAI_BASE_URL,
+        timeoutMs: process.env.OPENAI_TIMEOUT_MS
+          ? Number(process.env.OPENAI_TIMEOUT_MS)
           : undefined,
       })
     }

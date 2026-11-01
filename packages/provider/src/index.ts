@@ -24,6 +24,8 @@ export { OllamaProvider } from "./ollama.js"
 export type { OllamaProviderOptions } from "./ollama.js"
 export { OpenRouterProvider } from "./openrouter.js"
 export type { OpenRouterProviderOptions } from "./openrouter.js"
+export { OpenAIProvider } from "./openai.js"
+export type { OpenAIProviderOptions } from "./openai.js"
 
 // Factory
 export {

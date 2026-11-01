@@ -9,6 +9,7 @@ import {
   AnthropicProvider,
   OllamaProvider,
   OpenRouterProvider,
+  OpenAIProvider,
   extractCitations,
   checkUnsourcedClaims,
 } from "@fusorb/intel-provider"
@@ -86,6 +87,23 @@ describe("createProvider", () => {
     expect(() => createProvider()).toThrow(/OPENROUTER_MODEL is not set/)
   })
 
+  it("selects OpenAIProvider when INTEL_PROVIDER=openai", () => {
+    process.env.INTEL_PROVIDER = "openai"
+    process.env.OPENAI_MODEL = "llama3.2:latest"
+    process.env.OPENAI_BASE_URL = "http://localhost:1234/v1"
+    const provider = createProvider()
+    expect(provider).toBeInstanceOf(OpenAIProvider)
+    expect(provider.providerName).toBe("openai")
+    expect(provider.modelName).toBe("llama3.2:latest")
+  })
+
+  it("throws if OPENAI_MODEL is missing for openai provider", () => {
+    process.env.INTEL_PROVIDER = "openai"
+    delete process.env.OPENAI_MODEL
+    expect(() => createProvider()).toThrow(ProviderConfigurationError)
+    expect(() => createProvider()).toThrow(/OPENAI_MODEL is not set/)
+  })
+
   it("selects AnthropicProvider when INTEL_PROVIDER=anthropic", () => {
     process.env.INTEL_PROVIDER = "anthropic"
     process.env.ANTHROPIC_API_KEY = "sk-ant-api03-test"
@@ -115,7 +133,7 @@ describe("createProvider", () => {
 
   it("exports all valid provider values", () => {
     expect(VALID_PROVIDERS).toEqual(
-      expect.arrayContaining(["mock", "anthropic", "ollama", "openrouter"]),
+      expect.arrayContaining(["mock", "anthropic", "ollama", "openrouter", "openai"]),
     )
   })
 
@@ -384,6 +402,149 @@ describe("OpenRouterProvider", () => {
     })
     await expect(provider.generate({ question: "x?", context: "" })).rejects.toThrow(
       /OpenRouter API error: Insufficient credits/,
+    )
+  })
+})
+
+// --- OpenAIProvider tests (mocked fetch) ---
+
+describe("OpenAIProvider", () => {
+  const originalFetch = globalThis.fetch
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch
+  })
+
+  it("sends request to the configured baseUrl chat-completions endpoint with auth", async () => {
+    const mockFetch = vi.fn()
+    globalThis.fetch = mockFetch as unknown as typeof fetch
+
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        choices: [{ message: { role: "assistant", content: "Hello" } }],
+      }),
+    })
+
+    const provider = new OpenAIProvider({
+      apiKey: "sk-test",
+      model: "llama3.2:latest",
+      baseUrl: "http://localhost:1234/v1",
+    })
+    await provider.generate({ question: "hi?", context: "" })
+
+    expect(mockFetch).toHaveBeenCalledWith(
+      "http://localhost:1234/v1/chat/completions",
+      expect.objectContaining({
+        method: "POST",
+        headers: expect.objectContaining({
+          Authorization: "Bearer sk-test",
+          "Content-Type": "application/json",
+        }),
+      }),
+    )
+  })
+
+  it("omits the Authorization header when no API key is set (local servers)", async () => {
+    const mockFetch = vi.fn()
+    globalThis.fetch = mockFetch as unknown as typeof fetch
+
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        choices: [{ message: { role: "assistant", content: "Hi there" } }],
+      }),
+    })
+
+    const provider = new OpenAIProvider({ model: "llama3.2:latest" })
+    await provider.generate({ question: "hi?", context: "" })
+
+    const callArg = mockFetch.mock.calls[0]?.[1] as { headers: Record<string, string> }
+    expect(callArg.headers.Authorization).toBeUndefined()
+  })
+
+  it("extracts text and citations from response", async () => {
+    const mockFetch = vi.fn()
+    globalThis.fetch = mockFetch as unknown as typeof fetch
+
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        choices: [
+          {
+            message: {
+              role: "assistant",
+              content: "SovGrant uses React [source: package.json, commit: abc12345].",
+            },
+          },
+        ],
+      }),
+    })
+
+    const provider = new OpenAIProvider({
+      apiKey: "sk-test",
+      model: "llama3.2:latest",
+    })
+    const answer = await provider.generate({
+      question: "What does SovGrant use?",
+      context: 'sourcePath="package.json"',
+    })
+
+    expect(answer.text).toContain("React")
+    expect(answer.citations).toHaveLength(1)
+  })
+
+  it("flags empty response with a warning", async () => {
+    const mockFetch = vi.fn()
+    globalThis.fetch = mockFetch as unknown as typeof fetch
+
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        choices: [{ message: { role: "assistant", content: "" } }],
+      }),
+    })
+
+    const provider = new OpenAIProvider({ model: "llama3.2:latest" })
+    const answer = await provider.generate({ question: "x?", context: "" })
+
+    expect(answer.text).toBe("I don't know.")
+    expect(answer.warnings).toContain(
+      "OpenAI-compatible API returned an empty response — check model name and API key.",
+    )
+  })
+
+  it("throws on HTTP error response", async () => {
+    const mockFetch = vi.fn()
+    globalThis.fetch = mockFetch as unknown as typeof fetch
+
+    mockFetch.mockResolvedValue({
+      ok: false,
+      status: 401,
+      statusText: "Unauthorized",
+      text: async () => '{"error": {"message": "Invalid API key"}}',
+    })
+
+    const provider = new OpenAIProvider({ apiKey: "bad", model: "m" })
+    await expect(provider.generate({ question: "x?", context: "" })).rejects.toThrow(
+      /OpenAI-compatible API error: 401/,
+    )
+  })
+
+  it("handles error field in successful response body", async () => {
+    const mockFetch = vi.fn()
+    globalThis.fetch = mockFetch as unknown as typeof fetch
+
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        error: { message: "Model not found", type: "invalid_request_error" },
+      }),
+    })
+
+    const provider = new OpenAIProvider({ apiKey: "sk-test", model: "m" })
+    await expect(provider.generate({ question: "x?", context: "" })).rejects.toThrow(
+      /OpenAI-compatible API error: Model not found/,
     )
   })
 })
