@@ -328,6 +328,16 @@ variables (see `.env.example`):
 Free options for exercising the full `ask` path: a smaller local Ollama model, or a hosted
 OpenAI-compatible free tier (Groq, Cerebras, Gemini, GitHub Models) via `INTEL_PROVIDER=openai`.
 
+### Agent mode
+
+Use multi-step tool use to explore the graph autonomously:
+
+```bash
+pnpm ask "Find all callers of function parseTypeScriptFile" --agent
+```
+
+The agent can use `search_repo`, `read_document`, `inspect_dependencies`, `find_symbol`, `find_callers`, and `find_references`. Note that `find_callers`/`find_references` are best-effort until call/reference edges are extracted by the parser.
+
 ---
 
 ## Development workflow

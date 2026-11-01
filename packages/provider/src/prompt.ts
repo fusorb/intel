@@ -15,9 +15,15 @@ Instructions:
  * Providers that support system+user roles can reuse this directly.
  */
 export function buildMessages(request: GenerateRequest): Array<{
-  role: "system" | "user"
+  role: "system" | "user" | "assistant" | "tool"
   content: string
+  tool?: string
 }> {
+  // If custom messages are provided, use them (for agent loop)
+  if (request.messages && request.messages.length > 0) {
+    return request.messages
+  }
+
   const userMessage =
     `Question: ${request.question}\n\n` +
     `${request.context}\n\n` +

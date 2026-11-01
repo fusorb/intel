@@ -2,15 +2,44 @@ import { retrieve, formatContext } from "@fusorb/intel-retrieval"
 import { createProvider } from "@fusorb/intel-provider"
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs"
 import { resolve } from "node:path"
+import { runAgent } from "@fusorb/intel-agent"
 
 const AGENT_DIR = resolve(process.cwd(), ".agent")
 const CONTEXT_FILE = resolve(AGENT_DIR, "ask-context.txt")
 
 async function main(): Promise<void> {
-  const question = process.argv[2]
+  const args = process.argv.slice(2)
+  const useAgent = args.includes("--agent") || args.includes("-a")
+  const question = args.find((a) => !a.startsWith("-"))
+
   if (!question) {
-    console.error("Usage: pnpm ask \"<question>\"")
+    console.error("Usage: pnpm ask \"<question>\" [--agent]")
     process.exit(1)
+  }
+
+  if (useAgent) {
+    console.log("Mode: agent (multi-step tool use)")
+    console.log("")
+    const result = await runAgent(question)
+    console.log(result.answer)
+    console.log("")
+    if (result.citations.length > 0) {
+      console.log("--- Citations ---")
+      for (const citation of result.citations) {
+        const commit = citation.sourceCommitSha ?? "N/A"
+        console.log(`  - sourcePath: ${citation.sourcePath} | commit: ${commit}`)
+      }
+      console.log("")
+    }
+    if (result.warnings.length > 0) {
+      console.log("--- Warnings ---")
+      for (const warning of result.warnings) {
+        console.log(`  ! ${warning}`)
+      }
+      console.log("")
+    }
+    console.log(`--- Agent: ${result.steps} steps, ${result.toolCalls.length} tool calls ---`)
+    return
   }
 
   // Load previous retrieval context (for follow-up questions)

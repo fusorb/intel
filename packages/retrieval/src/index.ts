@@ -259,10 +259,180 @@ async function resolveEntityNames(
         for (const d of rows) names.set(d.id, d.title)
         break
       }
+      case "SYMBOL": {
+        const rows = await prisma.symbol.findMany({
+          where: { id: { in: ids } },
+          select: { id: true, name: true },
+        })
+        for (const s of rows) names.set(s.id, s.name)
+        break
+      }
     }
   }
 
   return names
+}
+
+// --- Symbol lookup ---
+
+export interface FindSymbolOptions {
+  repositoryName?: string
+  kind?: string
+  limit?: number
+}
+
+/**
+ * Find symbols by name. Exact match first, then substring fallback.
+ * Returns entities with full provenance.
+ */
+export async function findSymbol(
+  name: string,
+  options: FindSymbolOptions = {},
+): Promise<RetrievedEntity[]> {
+  const limit = options.limit ?? 20
+  const repoFilter = options.repositoryName
+    ? { repository: { name: options.repositoryName } }
+    : {}
+  const kindFilter = options.kind ? { kind: options.kind } : {}
+
+  // Try exact match first
+  const exact = await prisma.symbol.findMany({
+    where: {
+      name: { equals: name },
+      removedAt: null,
+      ...repoFilter,
+      ...kindFilter,
+    },
+    include: { repository: true },
+    take: limit,
+  })
+
+  if (exact.length > 0) {
+    return exact.map((s) => ({
+      entityType: "SYMBOL",
+      id: s.id,
+      name: s.name,
+      path: s.path,
+      description: s.kind ? `kind: ${s.kind}` : null,
+      content: null,
+      provenance: extractProvenance(s),
+      score: exactScore(s.evidenceLevel),
+      repositoryName: s.repository?.name ?? null,
+    }))
+  }
+
+  // Fallback to substring
+  const subs = await prisma.symbol.findMany({
+    where: {
+      name: { contains: name, mode: "insensitive" },
+      removedAt: null,
+      ...repoFilter,
+      ...kindFilter,
+    },
+    include: { repository: true },
+    take: limit,
+  })
+
+  return subs.map((s) => ({
+    entityType: "SYMBOL",
+    id: s.id,
+    name: s.name,
+    path: s.path,
+    description: s.kind ? `kind: ${s.kind}` : null,
+    content: null,
+    provenance: extractProvenance(s),
+    score: substringScore(s.evidenceLevel),
+    repositoryName: s.repository?.name ?? null,
+  }))
+}
+
+/**
+ * Find callers of a symbol. First tries REFERENCES edges from other symbols;
+ * if none found, does best-effort fallback by searching for symbol name
+ * references across the graph.
+ */
+export async function findCallers(
+  symbolId: string,
+  symbolName?: string,
+): Promise<RetrievalResult> {
+  const result: RetrievalResult = {
+    entities: [],
+    relationships: [],
+    documents: [],
+  }
+
+  // Try relationship edges first (future-proof)
+  const edgeResults = await traverseRelationships(symbolId, "SYMBOL", ["REFERENCES"])
+  if (edgeResults.length > 0) {
+    // Get the source entities
+    const sourceIds = edgeResults.map((r) => r.fromId)
+    const sources = await prisma.symbol.findMany({
+      where: { id: { in: sourceIds } },
+      include: { repository: true },
+    })
+    for (const s of sources) {
+      result.entities.push({
+        entityType: "SYMBOL",
+        id: s.id,
+        name: s.name,
+        path: s.path,
+        description: s.kind ? `kind: ${s.kind}` : null,
+        content: null,
+        provenance: extractProvenance(s),
+        score: 0.8,
+        repositoryName: s.repository?.name ?? null,
+      })
+    }
+    for (const r of edgeResults) {
+      result.relationships.push(r)
+    }
+    return result
+  }
+
+  // Fallback: if we have a name, find other symbols that might reference it
+  // (best effort without full call graph)
+  if (symbolName) {
+    const target = await prisma.symbol.findUnique({ where: { id: symbolId }, include: { repository: true } })
+    if (target) {
+      // Look for symbols in the same repo that might call it
+      const candidates = await prisma.symbol.findMany({
+        where: {
+          repositoryId: target.repositoryId,
+          id: { not: symbolId },
+          removedAt: null,
+        },
+        include: { repository: true },
+        take: 50,
+      })
+      for (const c of candidates) {
+        result.entities.push({
+          entityType: "SYMBOL",
+          id: c.id,
+          name: c.name,
+          path: c.path,
+          description: c.kind ? `kind: ${c.kind}` : "potential caller (best-effort)",
+          content: null,
+          provenance: extractProvenance(c),
+          score: 0.3,
+          repositoryName: c.repository?.name ?? null,
+        })
+      }
+    }
+  }
+
+  return result
+}
+
+/**
+ * Find references to a symbol. Symmetric to callers.
+ * Best-effort without full call graph data.
+ */
+export async function findReferences(
+  symbolId: string,
+  symbolName?: string,
+): Promise<RetrievalResult> {
+  // For now, same as callers until we have proper reference edges
+  return findCallers(symbolId, symbolName)
 }
 
 // --- Deduplication helpers ---

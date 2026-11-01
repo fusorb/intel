@@ -14,6 +14,8 @@ export interface Answer {
 export interface GenerateRequest {
   question: string
   context: string
+  messages?: Array<{ role: "system" | "user" | "assistant" | "tool"; content: string; tool?: string }>
+  tools?: Array<any>
 }
 
 export interface IntelligenceProvider {
