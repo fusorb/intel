@@ -325,6 +325,18 @@ confirmed?" and get a time-aware answer.
 6. Re-ingest repos after schema or code changes: `pnpm ingest:all`.
 7. Re-run verification: `pnpm verify`.
 
+### Continuous integration
+
+Two GitHub Actions workflows keep the repo honest:
+
+- **`ci`** (`.github/workflows/ci.yml`) — on every push to `main` and every PR:
+  install, `pnpm -r typecheck`, `pnpm -r build`, and the unit tests. No database is
+  provisioned, so the DB-backed tests self-skip.
+- **`sync`** (`.github/workflows/sync.yml`) — nightly and on demand: provisions
+  PostgreSQL, `prisma db push`, `pnpm ingest:all`, `pnpm seed:governance`, then
+  `pnpm verify` and the full suite. It fails when a product repo drifts, so the
+  graph never goes quietly stale.
+
 ### Conventions
 
 - **TypeScript strict** — no `any`; always type function params and returns.

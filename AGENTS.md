@@ -83,6 +83,11 @@ pnpm prisma:push
 6. Re-ingest repos after code changes: `pnpm ingest:all`.
 7. Re-seed decisions and governance after ingest or seed changes: `pnpm seed:governance`.
 
+## Continuous integration
+
+- `.github/workflows/ci.yml` — typecheck + build + unit tests on push/PR. No database, so DB-backed tests self-skip.
+- `.github/workflows/sync.yml` — nightly (and on demand): throws away a Postgres, runs `prisma db push` + `ingest:all` + `seed:governance` + `verify` + the full suite. Fails when a product repo drifts.
+
 ## Conventions to follow
 
 - **TypeScript strict** — no `any`, always type your function params and returns.

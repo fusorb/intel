@@ -78,6 +78,7 @@ describe("markStale marks relationships stale", () => {
   let sovgrantSnap: RepoSnapshot | null
 
   beforeEach(async () => {
+    if (!hasDb) return
     sovgrantSnap = await snapshotRepo("sovgrant")
     expect(sovgrantSnap).not.toBeNull()
   })
@@ -182,6 +183,7 @@ describe("markStale marks relationships stale", () => {
 
 describe("re-ingestion idempotency", () => {
   afterEach(async () => {
+    if (!hasDb) return
     const snap = await snapshotRepo("sovgrant")
     if (snap) await restoreRepo(snap)
   })

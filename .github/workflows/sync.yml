@@ -1,0 +1,81 @@
+name: sync
+
+# Keeps the Intel graph in step with the product repos: re-ingests all four,
+# re-seeds governance, and asserts the acceptance facts. Fails loudly when a
+# repo drifts (e.g. a name or dependency stops matching the standard), so the
+# graph never silently goes stale.
+#
+# Runs nightly and on demand. Uses the `mock` provider — no API keys required.
+
+on:
+  schedule:
+    - cron: "0 6 * * *" # daily at 06:00 UTC
+  workflow_dispatch:
+
+concurrency:
+  group: sync
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  sync-and-verify:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: intel
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/intel?schema=public
+      PRISMA_SKIP_ENGINE_DOWNLOAD: "true"
+      INTEL_PROVIDER: mock
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # The npm scripts run via `tsx --env-file=.env`, which hard-fails when the
+      # file is absent; write one from the job environment.
+      - name: Write .env
+        run: |
+          {
+            echo "DATABASE_URL=${DATABASE_URL}"
+            echo "PRISMA_SKIP_ENGINE_DOWNLOAD=true"
+            echo "INTEL_PROVIDER=mock"
+          } > .env
+
+      - name: Push schema
+        run: pnpm exec prisma db push --accept-data-loss
+
+      - name: Ingest all four product repos
+        run: pnpm ingest:all
+
+      - name: Seed decisions and governance
+        run: pnpm seed:governance
+
+      - name: Verify acceptance facts
+        run: pnpm verify
+
+      - name: Full test suite
+        run: pnpm test:run

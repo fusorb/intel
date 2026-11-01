@@ -32,6 +32,8 @@ This repo is **Tier-1 infra**. It is not a product that ships to end users.
   (`decisions.ts`) and the governance engine (`governance.ts`) — `runGovernance()` upserts
   decisions by stable `key`, writes `GOVERNS` edges, and detects `VIOLATES` edges. Run it
   with `pnpm seed:governance`.
+- **CI**: `.github/workflows/ci.yml` (typecheck/build/unit tests, no DB) and
+  `.github/workflows/sync.yml` (nightly ingest + seed + verify against a throwaway Postgres).
 
 ## Still deferred
 
