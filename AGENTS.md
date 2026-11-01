@@ -46,11 +46,12 @@ fusorb/intel
 │   │       ├── git.ts
 │   │       ├── ingest.ts
 │   │       ├── index.ts
-│   │       ├── parser.ts      # TS/TSX symbol extraction via TypeScript compiler API (wired into ingestion)
+│   │       ├── parser.ts      # TS/TSX symbol + call-reference extraction (TypeScript compiler API)
 │   │       └── types.ts
-│   ├── provider/              # IntelligenceProvider interface + Anthropic implementation
-│   ├── retrieval/             # Keyword search, graph traversal, context formatting
-│   └── tools/                 # Read-only tool surface (searchRepo, readDocument, etc.)
+│   ├── provider/              # IntelligenceProvider + mock/anthropic/ollama/openrouter/openai
+│   ├── retrieval/             # Keyword search, graph traversal, symbol lookup, context formatting
+│   ├── tools/                 # Read-only tool surface + registry (searchRepo, findSymbol, ...)
+│   └── agent/                 # Agentic multi-step tool-calling loop (runAgent)
 ├── tests/                     # Cross-package acceptance suite + shared setup
 ├── scripts/verify.ts          # Throwaway validation script (3 acceptance facts)
 ├── scripts/ask.ts             # Question-answering CLI entry point
@@ -101,10 +102,11 @@ pnpm prisma:push
 - **No speculative entities** — the schema has exactly six entity types (Repository, Package,
   Module, Symbol, Document, Decision). Don't add more unless the verification step proves
   they're needed.
-- **Don't build the answering layer yet** — `packages/retrieval`, `packages/provider`, and
-  `packages/tools` are already implemented. What's still deferred: `find_symbol` / `find_callers`
-  / `find_references` tools, embedding/hybrid retrieval, the agentic multi-step tool loop,
-  `apps/api`, and any UI.
+- **The answering layer is implemented** — `packages/retrieval`, `packages/provider`,
+  `packages/tools`, and `packages/agent` are all present. The agentic multi-step tool-calling
+  loop runs via `pnpm ask --agent`, with `find_symbol`, `find_callers`, and `find_references`
+  backed by REFERENCES call-graph edges extracted at ingest time. Still deferred:
+  embedding/hybrid retrieval, `apps/api`, and any UI.
 
 ## Common tasks
 

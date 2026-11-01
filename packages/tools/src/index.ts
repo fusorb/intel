@@ -139,13 +139,12 @@ export async function findCallers(
 // --- find_references ---
 
 /**
- * Find references to a symbol (best-effort without full call graph).
+ * Find symbols referenced by a symbol, using REFERENCES call-graph edges.
  */
 export async function findReferences(
   symbolId: string,
-  symbolName?: string,
 ): Promise<ToolResult<RetrievalResult>> {
-  const result = await findReferencesRetrieval(symbolId, symbolName)
+  const result = await findReferencesRetrieval(symbolId)
   return {
     data: result,
     source: `intel-retrieval.findReferences (${symbolId})`,
@@ -207,11 +206,10 @@ registerTool({
 
 registerTool({
   name: "find_references",
-  description: "Find references to a symbol (best-effort without full call graph)",
+  description: "Find symbols referenced by a symbol (uses REFERENCES call-graph edges)",
   parameters: [
     { name: "symbolId", type: "string", description: "Symbol ID", required: true },
-    { name: "symbolName", type: "string", description: "Symbol name", required: false },
   ],
-  handler: async (args) => findReferences(args.symbolId, args.symbolName),
+  handler: async (args) => findReferences(args.symbolId),
 })
 

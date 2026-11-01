@@ -22,6 +22,7 @@ import * as path from "node:path"
 import type * as ts from "typescript"
 
 import { prisma } from "@fusorb/intel-graph"
+import { linkReferences } from "./graph.js"
 
 /** Kinds of symbols the parser can extract from source. */
 export type SymbolKind =
@@ -80,6 +81,18 @@ export interface ExportInfo {
   reExportFrom?: string
 }
 
+/** A symbol reference (call or usage) extracted from a source file. */
+export interface ReferenceInfo {
+  /** Name of the enclosing declared symbol, or `$top` for module scope. */
+  fromSymbol: string
+  /** Name of the referenced symbol. */
+  toName: string
+  /** 1-based line number where the reference occurs. */
+  line: number
+  /** `true` when the reference is a call expression. */
+  isCall: boolean
+}
+
 /** Result of parsing a single source file. */
 export interface ParseResult {
   /** Every top-level symbol found in the file. */
@@ -88,6 +101,8 @@ export interface ParseResult {
   imports: ImportInfo[]
   /** Every export declaration. */
   exports: ExportInfo[]
+  /** Symbol references (calls/usages) found in the file. */
+  references: ReferenceInfo[]
   /** Human-readable parse errors (if any). */
   errors: string[]
 }
@@ -101,6 +116,8 @@ export interface ParseResult {
  */
 export interface SymbolInsertResult {
   count: number
+  /** Number of REFERENCES edges written from this file's symbols. */
+  references: number
   errors: string[]
   parseFailed: boolean
 }
@@ -129,6 +146,7 @@ export async function parseTypeScriptFile(filePath: string, source: string): Pro
     symbols: [],
     imports: [],
     exports: [],
+    references: [],
     errors: [],
   }
 
@@ -233,6 +251,51 @@ export async function parseTypeScriptFile(filePath: string, source: string): Pro
 
   // Top-level visit catches declarations anywhere in the file.
   tsMod.forEachChild(sourceFile, visit)
+
+  // --- Collect references (calls/usages), tracking the enclosing declaration ---
+  // We only record *call* references (direct calls and method calls) so the
+  // graph captures a usable call graph without every identifier becoming noise.
+  function declarationName(node: ts.Node): string | null {
+    if (tsMod.isFunctionDeclaration(node) && node.name) return node.name.text
+    if (tsMod.isClassDeclaration(node) && node.name) return node.name.text
+    if (tsMod.isInterfaceDeclaration(node) && node.name) return node.name.text
+    if (tsMod.isTypeAliasDeclaration(node) && node.name) return node.name.text
+    if (tsMod.isEnumDeclaration(node) && node.name) return node.name.text
+    if (tsMod.isMethodDeclaration(node) && node.name && tsMod.isIdentifier(node.name)) {
+      return node.name.text
+    }
+    if (tsMod.isVariableDeclaration(node) && node.name && tsMod.isIdentifier(node.name)) {
+      return node.name.text
+    }
+    return null
+  }
+
+  function collectReferences(node: ts.Node, enclosing: string): void {
+    const scope = declarationName(node) ?? enclosing
+
+    if (tsMod.isCallExpression(node)) {
+      const expr = node.expression
+      if (tsMod.isIdentifier(expr)) {
+        result.references.push({
+          fromSymbol: scope,
+          toName: expr.text,
+          line: pos(expr).line,
+          isCall: true,
+        })
+      } else if (tsMod.isPropertyAccessExpression(expr) && tsMod.isIdentifier(expr.name)) {
+        result.references.push({
+          fromSymbol: scope,
+          toName: expr.name.text,
+          line: pos(expr.name).line,
+          isCall: true,
+        })
+      }
+    }
+
+    tsMod.forEachChild(node, (child) => collectReferences(child, scope))
+  }
+
+  tsMod.forEachChild(sourceFile, (child) => collectReferences(child, "$top"))
 
   // --- Collect imports ---
   for (const node of sourceFile.statements) {
@@ -368,7 +431,7 @@ export async function linkSymbols(
 
   // Unsupported file type — not an error, just not TS/TSX.
   if (!parseResult) {
-    return { count: 0, errors: [], parseFailed: false }
+    return { count: 0, references: 0, errors: [], parseFailed: false }
   }
 
   // Parse errors must NOT be silently swallowed as a zero-symbol result.
@@ -376,6 +439,7 @@ export async function linkSymbols(
   if (parseResult.errors.length > 0) {
     return {
       count: 0,
+      references: 0,
       errors: parseResult.errors.map((e) => `${filePath}: ${e}`),
       parseFailed: true,
     }
@@ -384,10 +448,11 @@ export async function linkSymbols(
   const now = new Date()
   let count = 0
   const errors: string[] = []
+  const symbolIdByName = new Map<string, string>()
   for (const sym of parseResult.symbols) {
     const symbolPath = `${filePath}:${sym.line}`
     try {
-      await prisma.symbol.upsert({
+      const row = await prisma.symbol.upsert({
         where: {
           repositoryId_path_name: {
             repositoryId,
@@ -416,6 +481,7 @@ export async function linkSymbols(
           removedAt: null,
         },
       })
+      symbolIdByName.set(sym.name, row.id)
       count++
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
@@ -423,5 +489,39 @@ export async function linkSymbols(
     }
   }
 
-  return { count, errors, parseFailed: false }
+  // --- Link REFERENCES edges (best-effort call graph by name) ---
+  // Resolve each referenced name to an existing symbol in the same repository.
+  // Local names (defined in this file) win; otherwise any active symbol matches.
+  let references = 0
+  if (parseResult.references.length > 0 && symbolIdByName.size > 0) {
+    const toNames = [...new Set(parseResult.references.map((r) => r.toName))]
+    const candidates = await prisma.symbol.findMany({
+      where: { repositoryId, name: { in: toNames }, removedAt: null },
+      select: { id: true, name: true },
+      orderBy: { path: "asc" },
+    })
+    const targetIdByName = new Map<string, string>()
+    for (const c of candidates) {
+      if (!targetIdByName.has(c.name)) targetIdByName.set(c.name, c.id)
+    }
+
+    const seen = new Set<string>()
+    for (const ref of parseResult.references) {
+      const fromId = symbolIdByName.get(ref.fromSymbol)
+      const toId = targetIdByName.get(ref.toName)
+      if (!fromId || !toId || fromId === toId) continue
+      const key = `${fromId}:${toId}`
+      if (seen.has(key)) continue
+      seen.add(key)
+      try {
+        await linkReferences(fromId, toId, filePath, commitSha, ref.isCall ? "call" : "reference")
+        references++
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err)
+        errors.push(`reference ${ref.fromSymbol}->${ref.toName}: ${msg}`)
+      }
+    }
+  }
+
+  return { count, references, errors, parseFailed: false }
 }

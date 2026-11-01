@@ -356,6 +356,41 @@ export async function linkGoverns(
   })
 }
 
+/** Upsert a REFERENCES edge from one symbol to another (call/reference usage). */
+export async function linkReferences(
+  fromSymbolId: string,
+  toSymbolId: string,
+  sourcePath: string,
+  commitSha: string | null,
+  note?: string | null,
+): Promise<void> {
+  await prisma.relationship.upsert({
+    where: {
+      fromEntityId_toEntityId_fromEntityType_toEntityType_kind: {
+        fromEntityId: fromSymbolId,
+        toEntityId: toSymbolId,
+        fromEntityType: "SYMBOL",
+        toEntityType: "SYMBOL",
+        kind: "REFERENCES",
+      },
+    },
+    create: {
+      fromEntityId: fromSymbolId,
+      toEntityId: toSymbolId,
+      fromEntityType: "SYMBOL",
+      toEntityType: "SYMBOL",
+      kind: "REFERENCES",
+      note: note ?? null,
+      ...provenance(sourcePath, commitSha, "inferred", "file"),
+    },
+    update: {
+      note: note ?? null,
+      ...provenance(sourcePath, commitSha, "inferred", "file"),
+      removedAt: null,
+    },
+  })
+}
+
 /** Upsert a VIOLATES edge from a detected offending entity to the Decision it breaks. */
 export async function linkViolates(
   sourceId: string,
@@ -472,6 +507,24 @@ export async function markStale(repositoryId: string): Promise<void> {
         fromEntityId: { in: pkgIds.map((p) => p.id) },
         fromEntityType: "PACKAGE",
         kind: "CONSUMES",
+        removedAt: null,
+      },
+      data: { removedAt: now },
+    })
+  }
+
+  // Mark stale REFERENCES relationships from symbols belonging to this repository
+  const symIds = await prisma.symbol.findMany({
+    where: { repositoryId },
+    select: { id: true },
+  })
+  if (symIds.length > 0) {
+    const symIdList = symIds.map((s) => s.id)
+    await prisma.relationship.updateMany({
+      where: {
+        fromEntityId: { in: symIdList },
+        fromEntityType: "SYMBOL",
+        kind: "REFERENCES",
         removedAt: null,
       },
       data: { removedAt: now },

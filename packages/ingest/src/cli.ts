@@ -10,7 +10,8 @@ async function report(summary: IngestSummary): Promise<void> {
     `ingested ${summary.repo} @ ${short}: ` +
       `${summary.packages} packages, ${summary.modules} modules, ${summary.documents} documents, ` +
       `${summary.symbols} symbols, ` +
-      `${summary.consumesEdges} CONSUMES edges, ${summary.containsEdges} CONTAINS edges`,
+      `${summary.consumesEdges} CONSUMES edges, ${summary.containsEdges} CONTAINS edges, ` +
+      `${summary.referencesEdges} REFERENCES edges`,
   )
   console.log(
     `  symbol extraction: ${summary.symbolFilesParsed} parsed, ` +

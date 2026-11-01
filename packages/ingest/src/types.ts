@@ -42,6 +42,7 @@ export interface IngestSummary {
   symbols: number
   consumesEdges: number
   containsEdges: number
+  referencesEdges: number
   symbolFilesParsed: number
   symbolFilesSkipped: number
   symbolFilesErrored: number

@@ -16,6 +16,7 @@ export {
   linkConsumes,
   linkGoverns,
   linkViolates,
+  linkReferences,
   upsertDecision,
   syncPackageConsumes,
   startIngestionRun,

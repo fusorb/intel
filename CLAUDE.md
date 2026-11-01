@@ -25,9 +25,12 @@ This repo is **Tier-1 infra**. It is not a product that ships to end users.
   <repo-url> [--branch <branch>]`. TS/TSX symbol extraction is wired in via the TypeScript
   compiler API (`parser.ts`, `typescript` as an optional dependency).
 - **Retrieval**: `packages/retrieval` — keyword search, graph traversal, context formatting.
-- **Provider**: `packages/provider` — `IntelligenceProvider` interface + Anthropic implementation.
-- **Tools**: `packages/tools` — read-only tool surface (`searchRepo`, `readDocument`,
-  `inspectDependencies`).
+- **Provider**: `packages/provider` — `IntelligenceProvider` interface + mock / anthropic /
+  ollama / openrouter / openai (generic OpenAI-compatible) implementations.
+- **Tools**: `packages/tools` — read-only tool surface + registry (`searchRepo`,
+  `readDocument`, `inspectDependencies`, `findSymbol`, `findCallers`, `findReferences`).
+- **Agent**: `packages/agent` — multi-step tool-calling loop (`runAgent`) over the provider
+  and tool registry; used via `pnpm ask --agent`.
 - **Governance**: `packages/ingest` also holds the authored `Decision` seed
   (`decisions.ts`) and the governance engine (`governance.ts`) — `runGovernance()` upserts
   decisions by stable `key`, writes `GOVERNS` edges, and detects `VIOLATES` edges. Run it
@@ -37,9 +40,7 @@ This repo is **Tier-1 infra**. It is not a product that ships to end users.
 
 ## Still deferred
 
-- `find_symbol`, `find_callers`, `find_references` tools (not yet in `packages/tools`)
 - Embedding / hybrid retrieval (not yet in `packages/retrieval`)
-- The agentic multi-step tool-calling loop
 - `apps/api` — any API/console surface
 - Any UI
 
@@ -115,5 +116,6 @@ pnpm seed:governance
 | `pnpm -r build` | Build every package (tsup) |
 | `pnpm ingest <url> [--branch <branch>]` | Ingest a single repo |
 | `pnpm ingest:all` | Ingest all 4 repos (facet, sovgrant, relnex, sovport) |
+| `pnpm ask "<question>" [--agent]` | Ask a question — single-shot, or the multi-step agent |
 | `pnpm verify` | Run the throwaway verification script (3 acceptance facts) |
 | `pnpm seed:governance` | Seed authored decisions and (re)compute GOVERNS/VIOLATES edges |

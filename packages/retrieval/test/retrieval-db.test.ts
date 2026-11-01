@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeAll } from "vitest"
+import { prisma } from "@fusorb/intel-graph"
 import {
   searchPackage,
   searchRepository,
@@ -8,6 +9,9 @@ import {
   getActiveDecisions,
   getGovernedEntities,
   traverseRelationships,
+  findSymbol,
+  findCallers,
+  findReferences,
 } from "@fusorb/intel-retrieval"
 
 const hasDb = Boolean(process.env.DATABASE_URL)
@@ -156,5 +160,53 @@ describe("traverseRelationships", () => {
       expect(results.length).toBeGreaterThan(0)
       expect(results.some((r) => r.kind === "CONSUMES")).toBe(true)
     })
+  })
+})
+
+describe("findSymbol", () => {
+  it("returns empty for a nonsense name", async () => {
+    if (!hasDb) return
+    const results = await findSymbol("zzz_nonexistent_symbol_zzz")
+    expect(results).toHaveLength(0)
+  })
+
+  it("finds an ingested symbol by exact name with provenance", async () => {
+    if (!hasDb) return
+    const sample = await prisma.symbol.findFirst({
+      where: { removedAt: null },
+      select: { name: true },
+    })
+    if (!sample) return // no symbols ingested in this database
+
+    const results = await findSymbol(sample.name)
+    expect(results.some((e) => e.name === sample.name)).toBe(true)
+    expect(results[0].entityType).toBe("SYMBOL")
+    expect(results[0].provenance.sourcePath).toBeTruthy()
+  })
+})
+
+describe("findCallers / findReferences", () => {
+  it("returns an empty RetrievalResult for an unknown symbol id", async () => {
+    if (!hasDb) return
+    const callers = await findCallers("nonexistent-symbol-id")
+    expect(callers.entities).toEqual([])
+    expect(callers.relationships).toEqual([])
+
+    const refs = await findReferences("nonexistent-symbol-id")
+    expect(refs.entities).toEqual([])
+    expect(refs.relationships).toEqual([])
+  })
+
+  it("resolves REFERENCES edges when the call graph is populated", async () => {
+    if (!hasDb) return
+    const edge = await prisma.relationship.findFirst({
+      where: { kind: "REFERENCES", removedAt: null },
+      select: { toEntityId: true },
+    })
+    if (!edge) return // call graph not populated yet in this database
+
+    const callers = await findCallers(edge.toEntityId)
+    expect(callers.relationships.length).toBeGreaterThan(0)
+    expect(callers.relationships.every((r) => r.kind === "REFERENCES")).toBe(true)
   })
 })

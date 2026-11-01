@@ -364,7 +364,7 @@ export async function findCallers(
   // Try relationship edges first (future-proof)
   const edgeResults = await traverseRelationships(symbolId, "SYMBOL", ["REFERENCES"])
   if (edgeResults.length > 0) {
-    // Get the source entities
+    // Get the source entities (symbols that reference this symbol)
     const sourceIds = edgeResults.map((r) => r.fromId)
     const sources = await prisma.symbol.findMany({
       where: { id: { in: sourceIds } },
@@ -379,7 +379,7 @@ export async function findCallers(
         description: s.kind ? `kind: ${s.kind}` : null,
         content: null,
         provenance: extractProvenance(s),
-        score: 0.8,
+        score: 0.9,
         repositoryName: s.repository?.name ?? null,
       })
     }
@@ -390,11 +390,9 @@ export async function findCallers(
   }
 
   // Fallback: if we have a name, find other symbols that might reference it
-  // (best effort without full call graph)
   if (symbolName) {
     const target = await prisma.symbol.findUnique({ where: { id: symbolId }, include: { repository: true } })
     if (target) {
-      // Look for symbols in the same repo that might call it
       const candidates = await prisma.symbol.findMany({
         where: {
           repositoryId: target.repositoryId,
@@ -423,16 +421,66 @@ export async function findCallers(
   return result
 }
 
-/**
- * Find references to a symbol. Symmetric to callers.
- * Best-effort without full call graph data.
- */
 export async function findReferences(
   symbolId: string,
-  symbolName?: string,
 ): Promise<RetrievalResult> {
-  // For now, same as callers until we have proper reference edges
-  return findCallers(symbolId, symbolName)
+  const result: RetrievalResult = {
+    entities: [],
+    relationships: [],
+    documents: [],
+  }
+
+  // Try relationship edges where this symbol is the source (references others)
+  const edges = await prisma.relationship.findMany({
+    where: {
+      fromEntityId: symbolId,
+      fromEntityType: "SYMBOL",
+      kind: "REFERENCES",
+      removedAt: null,
+    },
+  })
+
+  if (edges.length > 0) {
+    const targetIds = edges.map((e) => e.toEntityId)
+    const targets = await prisma.symbol.findMany({
+      where: { id: { in: targetIds } },
+      include: { repository: true },
+    })
+    for (const s of targets) {
+      result.entities.push({
+        entityType: "SYMBOL",
+        id: s.id,
+        name: s.name,
+        path: s.path,
+        description: s.kind ? `kind: ${s.kind}` : null,
+        content: null,
+        provenance: extractProvenance(s),
+        score: 0.9,
+        repositoryName: s.repository?.name ?? null,
+      })
+    }
+    const nameMap = await resolveEntityNames(targetIds.map((id) => ({ id, type: "SYMBOL" })))
+    const sourceName = await prisma.symbol.findUnique({ where: { id: symbolId }, select: { name: true } })
+    for (const e of edges) {
+      result.relationships.push({
+        id: e.id,
+        kind: e.kind,
+        fromId: e.fromEntityId,
+        fromType: e.fromEntityType,
+        fromName: sourceName?.name ?? symbolId,
+        toId: e.toEntityId,
+        toType: e.toEntityType,
+        toName: nameMap.get(e.toEntityId) ?? e.toEntityId,
+        note: e.note,
+        depType: null,
+        provenance: extractProvenance(e),
+        score: 0.8 * evidenceMultiplier(e.evidenceLevel),
+      })
+    }
+    return result
+  }
+
+  return result
 }
 
 // --- Deduplication helpers ---

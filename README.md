@@ -336,7 +336,7 @@ Use multi-step tool use to explore the graph autonomously:
 pnpm ask "Find all callers of function parseTypeScriptFile" --agent
 ```
 
-The agent can use `search_repo`, `read_document`, `inspect_dependencies`, `find_symbol`, `find_callers`, and `find_references`. Note that `find_callers`/`find_references` are best-effort until call/reference edges are extracted by the parser.
+The agent can use `search_repo`, `read_document`, `inspect_dependencies`, `find_symbol`, `find_callers`, and `find_references`. `find_callers`/`find_references` use REFERENCES edges when available, with best-effort fallbacks.
 
 ---
 
@@ -400,6 +400,7 @@ Intel ingests these four product repositories:
 - **source directories** (anything with `.ts`/`.tsx`/`.js`/`.jsx`) → Module entities
 - **Markdown files** (`.md`, `.mdx`, `.markdown`) → Document entities with title + summary
 - **TS/TSX files** → Symbol entities (functions, classes, consts, etc.) via the TypeScript compiler API
+- **Call/reference usage in TS/TSX** → REFERENCES edges between symbols (a best-effort call graph)
 - **Dependency declarations** → CONSUMES relationship edges (with semver range as the `note`)
 - **Repository → entity containment** → CONTAINS relationship edges
 - **IngestionRun** → per-repo ingestion metadata (commit, status, entity/edge counts)
@@ -428,12 +429,10 @@ Because every fact carries its commit SHA and timestamp, Intel can answer questi
 - **`apps/api`** — any API or console surface. An eventual thin `@fusorb/intel-sdk` HTTP client
   (analogous to `facet-sdk`) is the right shape for external consumers — the internal packages give
   direct database access and should not be published.
-- **`find_symbol`, `find_callers`, `find_references` tools** — symbol-level query tools not yet
-  implemented in `packages/tools`.
+- **`find_symbol`, `find_callers`, `find_references` tools** — symbol-level query tools implemented in `packages/tools` with agentic loop support.
 - **Embedding / hybrid retrieval** — retrieval is currently keyword-based; hybrid lexical + embedding
   search is planned but not yet implemented.
-- **Agentic multi-step tool-calling loop** — `packages/tools` provides the read-only tool surface
-  but is not yet wired into an agentic loop.
+- **Agentic multi-step tool-calling loop** — available via `packages/agent` and `pnpm ask --agent`.
 - **Any UI** — no frontend is planned at this tier.
 
 See the [CLAUDE.md](./CLAUDE.md) for the full agent-facing developer guide.

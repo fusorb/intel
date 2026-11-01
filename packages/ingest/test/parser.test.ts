@@ -174,6 +174,59 @@ describe("parseTypeScriptFile", () => {
   })
 })
 
+describe("reference extraction", () => {
+  it("exposes a references array on ParseResult", async () => {
+    const result = await parseTypeScriptFile("r.ts", "export function f() { return 1 }")
+    expect(Array.isArray(result.references)).toBe(true)
+  })
+
+  it("records a direct call with the enclosing symbol as fromSymbol", async () => {
+    const src = `
+      function helper() { return 1 }
+      export function main() { helper() }
+    `
+    const result = await parseTypeScriptFile("calls.ts", src)
+    const ref = result.references.find((r) => r.toName === "helper")
+    expect(ref).toBeDefined()
+    expect(ref!.fromSymbol).toBe("main")
+    expect(ref!.isCall).toBe(true)
+    expect(ref!.line).toBeGreaterThan(0)
+  })
+
+  it("records method calls by method name", async () => {
+    const src = `
+      export function run() { console.log("hi") }
+    `
+    const result = await parseTypeScriptFile("methods.ts", src)
+    const ref = result.references.find((r) => r.toName === "log")
+    expect(ref).toBeDefined()
+    expect(ref!.fromSymbol).toBe("run")
+    expect(ref!.isCall).toBe(true)
+  })
+
+  it("uses $top for calls made at module scope", async () => {
+    const src = `
+      function boot() { return 1 }
+      boot()
+    `
+    const result = await parseTypeScriptFile("top.ts", src)
+    const ref = result.references.find((r) => r.toName === "boot")
+    expect(ref).toBeDefined()
+    expect(ref!.fromSymbol).toBe("$top")
+  })
+
+  it("attributes calls inside a class method to the method", async () => {
+    const src = `
+      function helper() { return 1 }
+      export class C { run() { helper() } }
+    `
+    const result = await parseTypeScriptFile("class.ts", src)
+    const ref = result.references.find((r) => r.toName === "helper")
+    expect(ref).toBeDefined()
+    expect(ref!.fromSymbol).toBe("run")
+  })
+})
+
 describe("linkSymbols error observability", () => {
   it("returns parseFailed=true with errors for invalid TypeScript (no DB needed)", async () => {
     const bad = "function { invalid syntax"

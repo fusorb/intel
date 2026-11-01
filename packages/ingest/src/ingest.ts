@@ -67,6 +67,7 @@ export async function ingestRepo(
   let symbolFilesErrored = 0
   let consumesEdges = 0
   let containsEdges = 0
+  let referencesEdges = 0
 
   for (const pkg of extracted.packages) {
     try {
@@ -129,13 +130,10 @@ export async function ingestRepo(
     }
     try {
       const source = readFileSync(sf.abs, "utf-8")
-      const { count, errors: symErrors, parseFailed } = await linkSymbols(
-        repoId,
-        sf.rel,
-        source,
-        commitSha,
-      )
+      const { count, references: refEdges, errors: symErrors, parseFailed } =
+        await linkSymbols(repoId, sf.rel, source, commitSha)
       symbolsCount += count
+      referencesEdges += refEdges
       if (parseFailed) {
         symbolFilesErrored++
       } else {
@@ -201,6 +199,7 @@ export async function ingestRepo(
     symbols: symbolsCount,
     consumesEdges,
     containsEdges,
+    referencesEdges,
     symbolFilesParsed,
     symbolFilesSkipped,
     symbolFilesErrored,
