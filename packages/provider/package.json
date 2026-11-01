@@ -9,7 +9,7 @@
   "scripts": {
     "build": "tsup src/index.ts --format esm --dts --clean",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run --config vitest.provider.config.ts"
+    "test": "cd ../.. && vitest run --config vitest.provider.config.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.127.0"

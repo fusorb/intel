@@ -1,7 +1,9 @@
 # API Contract
 
-Public interfaces for the `@fusorb/intel-*` packages. This document is the source of truth
-for each package's public surface — it is regenerated against the actual TypeScript source.
+Public interfaces for the `@fusorb/intel-*` packages. This document mirrors each package's
+barrel (`src/index.ts`); when in doubt, the TypeScript source is authoritative.
+
+Packages: `evidence`, `graph`, `ingest`, `provider`, `retrieval`, `tools`, `agent`.
 
 ---
 
@@ -11,25 +13,25 @@ Zero-dependency vocabulary layer. Re-exported through `@fusorb/intel-graph`.
 
 ```ts
 enum EvidenceLevel {
-  verified            // read directly from a file
-  strongly_supported  // backed by strong but indirect evidence
-  inferred            // synthesized (e.g. dependency edge from package.json)
-  unknown             // not yet assessed
+  Verified = "verified"            // read directly from a file
+  StronglySupported = "strongly_supported"  // strong but indirect evidence
+  Inferred = "inferred"            // synthesized (e.g. a dependency edge from package.json)
+  Unknown = "unknown"              // not yet assessed
 }
 
 interface ProvenanceData {
-  sourcePath: string          // "src/foo.ts", "npm:@fusorb/facet-components"
+  sourcePath: string
   sourceCommitSha: string | null
   retrievedAt: Date
   evidenceLevel: EvidenceLevel
 }
 
-function toEvidenceLevel(level: string): EvidenceLevel
+function toEvidenceLevel(v: string): EvidenceLevel   // throws on unrecognized input
 function evidenceLevelToString(level: EvidenceLevel): string
 function createProvenance(
   sourcePath: string,
-  commitSha: string | null,
-  level: EvidenceLevel,
+  sourceCommitSha: string | null,
+  level?: EvidenceLevel,           // defaults to EvidenceLevel.Verified
 ): ProvenanceData
 function isVerifiedOrStronger(level: EvidenceLevel): boolean
 ```
@@ -38,92 +40,40 @@ function isVerifiedOrStronger(level: EvidenceLevel): boolean
 
 ## `@fusorb/intel-graph`
 
-Lazy Prisma client singleton — importing `@fusorb/intel-graph` does **not** require `DATABASE_URL`.
-The connection pool is created on first database access.
+Lazy Prisma client singleton — importing `@fusorb/intel-graph` does **not** require
+`DATABASE_URL`. The connection pool is created on first database access (a `Proxy` defers
+`buildPool()`/`buildClient()` until then).
 
 ```ts
-const prisma: PrismaClient  // Proxy — lazy, connection deferred
+const prisma: PrismaClient          // lazy Proxy — connection deferred
 
-// Re-exports from evidence
-export { EvidenceLevel, toEvidenceLevel, evidenceLevelToString, isVerifiedOrStronger } from "@fusorb/intel-evidence"
-export type { ProvenanceData, EvidenceLevel as EvidenceLevelType }
+// Prisma enum re-exports
+export { EntityType, RelationshipKind, DependencyType } from "@prisma/client"
+export type { Prisma } from "@prisma/client"
+
+// Everything from @fusorb/intel-evidence is re-exported here too
+export * from "@fusorb/intel-evidence"
 ```
 
-### Provenance helpers
+### Schema (six entities + `Relationship`)
 
-```ts
-type ProvLevel = "verified" | "strongly_supported" | "inferred" | "unknown"
-type ProvSourceType = "file" | "commit" | "human_statement" | "inferred_pattern"
-
-interface ProvenanceFields {
-  sourcePath: string
-  sourceType: SourceType
-  sourceCommitSha: string | null
-  firstSeenAt: Date
-  retrievedAt: Date
-  removedAt: Date | null
-  evidenceLevel: EvidenceLevel
-}
-
-function provenance(
-  sourcePath: string,
-  sourceCommitSha: string | null,
-  level: ProvLevel,
-  sourceType: ProvSourceType,
-  retrievedAt?: Date,
-): ProvenanceFields
-```
-
-### Graph operations
-
-All functions accept repository-scoped parameters and return the relevant DB id
-(`string`) or void. `linkContains` and `linkConsumes` return `Promise<void>`.
-`syncPackageConsumes` returns `Promise<number>` (edge count).
-
-```ts
-function markStale(repositoryId: string): Promise<void>
-function upsertRepository(name: string, url: string | null, defaultBranch: string | null,
-  commitSha: string | null, sourcePath: string, sourceType: ProvSourceType,
-  level: ProvLevel): Promise<string>
-function upsertPackage(repoId: string, pkg: ExtractedPackage, commitSha: string | null): Promise<string>
-function upsertModule(repoId: string, mod: ExtractedModule, commitSha: string | null): Promise<string>
-function upsertDocument(repoId: string, doc: ExtractedDocument, commitSha: string | null): Promise<string>
-function linkContains(repositoryId: string, targetId: string, targetType: "PACKAGE" | "MODULE" | "DOCUMENT",
-  sourcePath: string, commitSha: string | null): Promise<void>
-function linkConsumes(repoId: string, sourcePkgId: string, targetPkgId: string,
-  range: string, depType: DependencyType | null, sourcePath: string,
-  commitSha: string | null): Promise<void>
-function syncPackageConsumes(pkg: PackageRef, dependencies: Record<string, string> | null,
-  devDependencies: Record<string, string> | null, peerDependencies: Record<string, string> | null,
-  optionalDependencies: Record<string, string> | null, commitSha: string | null): Promise<number>
-function startIngestionRun(repositoryId: string, commitSha: string, branch: string | null): Promise<string>
-function completeIngestionRun(
-  runId: string,
-  status: "success" | "failed",
-  counts: {
-    packages: number
-    modules: number
-    documents: number
-    symbols: number
-    consumesEdges: number
-    containsEdges: number
-    symbolFilesParsed: number
-    symbolFilesSkipped: number
-    symbolFilesErrored: number
-  },
-  errors?: string[],
-  warnings?: string[],
-): Promise<void>
-```
+`Repository`, `Package`, `Module`, `Symbol`, `Document`, `Decision` — plus a polymorphic
+`Relationship` join table (`fromEntityId`/`toEntityId` + `fromEntityType`/`toEntityType`,
+`kind`, `note`, `depType`). Every row carries provenance. `RelationshipKind`:
+`CONTAINS`, `CONSUMES`, `DEPENDS_ON`, `RENAMED_FROM`, `DOCUMENTS`, `EXPORTS`, `DEFINES`,
+`REFERENCES`, `GOVERNS`, `VIOLATES`.
 
 ---
 
 ## `@fusorb/intel-ingest`
 
-### Ingestion entry point
+Repo cloning, file-tree walking, entity + symbol extraction, and all graph writes. CLI:
+`pnpm ingest <repo-url> [--branch <branch>]`.
+
+### Entry point
 
 ```ts
-async function ingestRepo(repoUrl: string, branch: string | null = null): Promise<IngestSummary>
+async function ingestRepo(repoUrl: string, branch: string | null): Promise<IngestSummary>
 
 interface IngestSummary {
   repo: string
@@ -135,240 +85,306 @@ interface IngestSummary {
   symbols: number
   consumesEdges: number
   containsEdges: number
-  symbolFilesParsed: number     // .ts/.tsx files successfully parsed
-  symbolFilesSkipped: number    // files beyond size cap (MAX_SYMBOL_FILE_SIZE = 200_000)
-  symbolFilesErrored: number    // files with parse errors
-  warnings: string[]            // non-fatal diagnostics (skips, parse errors, per-symbol DB errors)
+  referencesEdges: number      // REFERENCES call-graph edges written
+  symbolFilesParsed: number
+  symbolFilesSkipped: number
+  symbolFilesErrored: number
+  warnings: string[]
 }
 ```
 
-### Extraction
+### Graph operations
+
+All writes set full provenance. `provenance(...)` validates the evidence level and stamps
+`retrievedAt`.
 
 ```ts
-function extractRepo(repoRoot: string): ExtractedRepo
-function collectSourceFiles(repoRoot: string): ScannedFile[]
+type ProvLevel = "verified" | "strongly_supported" | "inferred" | "unknown"
+type ProvSourceType = "file" | "commit" | "human_statement" | "inferred_pattern"
 
-// Constants
+interface ProvenanceFields {
+  sourcePath: string
+  sourceCommitSha: string | null
+  retrievedAt: Date
+  evidenceLevel: ProvLevel
+  sourceType: ProvSourceType
+}
+
+function provenance(sourcePath: string, commitSha: string | null, level: ProvLevel,
+  sourceType: ProvSourceType): ProvenanceFields
+
+function markStale(repositoryId: string): Promise<void>   // soft-delete a repo's entities AND
+                                                          // CONTAINS/CONSUMES/REFERENCES edges
+
+function upsertRepository(name: string, url: string | null, branch: string | null,
+  commitSha: string | null, sourcePath: string, sourceType: ProvSourceType,
+  level: ProvLevel): Promise<string>
+function upsertPackage(repoId: string, pkg: ExtractedPackage, commitSha: string | null): Promise<string>
+function upsertModule(repoId: string, mod: ExtractedModule, commitSha: string | null): Promise<string>
+function upsertDocument(repoId: string, doc: ExtractedDocument, commitSha: string | null): Promise<string>
+
+function linkContains(repositoryId: string, targetId: string,
+  targetType: "PACKAGE" | "MODULE" | "DOCUMENT", sourcePath: string,
+  commitSha: string | null): Promise<void>
+function linkConsumes(sourcePkgId: string, targetPkgId: string, range: string | null,
+  depType: DependencyType | null, sourcePath: string, commitSha: string | null): Promise<void>
+function linkReferences(fromSymbolId: string, toSymbolId: string, sourcePath: string,
+  commitSha: string | null, note?: string | null): Promise<void>
+
+function syncPackageConsumes(pkg: { id: string; sourcePath: string },
+  dependencies: Record<string, string> | null,
+  devDependencies: Record<string, string> | null,
+  peerDependencies: Record<string, string> | null,
+  optionalDependencies: Record<string, string> | null,
+  commitSha: string | null): Promise<number>   // edge count
+
+function startIngestionRun(repositoryId: string, commitSha: string, branch: string | null): Promise<string>
+function completeIngestionRun(runId: string, status: "success" | "failed",
+  counts: {
+    packages: number; modules: number; documents: number; symbols: number
+    consumesEdges: number; containsEdges: number
+    symbolFilesParsed: number; symbolFilesSkipped: number; symbolFilesErrored: number
+  },
+  errors?: string[], warnings?: string[]): Promise<void>
+```
+
+### Decisions / governance
+
+`Decision` rows are authored (never ingested). `runGovernance()` upserts them by stable
+`key`, writes `GOVERNS` edges, and detects `VIOLATES` edges (retired `@arcevo/*` scope,
+shadcn-style UI deps, missing `AGENTS.md`/`CLAUDE.md`). Idempotent.
+
+```ts
+interface DecisionUpsertInput {
+  key: string; title: string; statement: string; status: string
+  sourcePath: string; sourceCommitSha: string | null
+}
+function upsertDecision(input: DecisionUpsertInput): Promise<string>
+function linkGoverns(decisionId: string, targetId: string,
+  targetType: "REPOSITORY" | "PACKAGE" | "MODULE", note: string | null,
+  sourcePath: string, commitSha: string | null): Promise<void>
+function linkViolates(sourceId: string,
+  sourceType: "REPOSITORY" | "PACKAGE" | "MODULE", decisionId: string,
+  note: string | null, sourcePath: string, commitSha: string | null): Promise<void>
+
+interface GovernanceSummary { decisions: number; governsEdges: number; violations: number }
+function runGovernance(): Promise<GovernanceSummary>
+function detectViolations(decisionIds: Map<string, string>): Promise<number>
+
+// Authored seed data (ecosystem invariants) + its types
+const ECOSYSTEM_DECISIONS: DecisionSeed[]
+interface DecisionSeed {
+  key: string; title: string; statement: string; status: string
+  sourcePath: string; sourceCommitSha: string | null; governs: DecisionTarget[]
+}
+interface DecisionTarget { type: "REPOSITORY" | "PACKAGE"; repository: string; packageName?: string }
+```
+
+### Extraction & parser
+
+```ts
+function extractRepo(repoRoot: string): ExtractedRepo      // internal (not in the barrel)
+function collectSourceFiles(repoRoot: string): ScannedFile[]  // internal
+
 const MAX_SYMBOL_FILES = 300
 const MAX_SYMBOL_FILE_SIZE = 200_000
+
+type SymbolKind =
+  | "function" | "class" | "interface" | "type" | "const" | "enum"
+  | "variable" | "method" | "property" | "parameter"
+
+interface SymbolInfo {
+  name: string; kind: SymbolKind
+  line: number; column: number
+  endLine?: number; endColumn?: number
+  isExported: boolean
+}
+interface ImportInfo {
+  specifier: string; names: string[]
+  isNamespace: boolean; isDefault: boolean; isTypeOnly: boolean
+}
+interface ExportInfo {
+  name: string; localAlias?: string
+  isDefault: boolean; isWildcard: boolean; reExportFrom?: string
+}
+interface ReferenceInfo {                     // a call/usage reference
+  fromSymbol: string                          // enclosing declaration, or "$top"
+  toName: string; line: number; isCall: boolean
+}
+
+interface ParseResult {
+  symbols: SymbolInfo[]; imports: ImportInfo[]; exports: ExportInfo[]
+  references: ReferenceInfo[]
+  errors: string[]                            // non-fatal parse diagnostics
+}
+
+interface SymbolInsertResult {
+  count: number
+  references: number                          // REFERENCES edges written for this file
+  errors: string[]; parseFailed: boolean
+}
+
+interface FileParser { readonly extensions: string[]; parse(filePath, source): Promise<ParseResult> }
+
+async function parseTypeScriptFile(filePath: string, source: string): Promise<ParseResult>
+async function parseFile(filePath: string, source: string): Promise<ParseResult | null>
+async function linkSymbols(repositoryId: string, filePath: string, source: string,
+  commitSha: string | null): Promise<SymbolInsertResult>
 ```
+
+`typescript` is an **optional** dependency, loaded via dynamic `import("typescript")`. If it
+is missing, `parseTypeScriptFile` returns an empty result with one diagnostic and ingestion
+continues without symbol data.
 
 ### Git utilities
 
 ```ts
-const AGENT_REPOS: string  // resolves to .agent/repos at process.cwd()
+const AGENT_REPOS: string                       // resolves to .agent/repos at process.cwd()
 function repositoryNameFromUrl(url: string): string
 function cloneOrFetch(repoUrl: string, dest: string, branch: string | null): string
 function currentCommit(dest: string): string
 function defaultBranch(dest: string): string | null
 ```
 
-### Symbol extraction
-
-Requires the `typescript` package as an **optional** dependency. If `typescript` is
-not installed, `parseTypeScriptFile` returns a `ParseResult` with a single error string
-and an empty symbols list — ingestion continues without symbol-level data.
-
-`parseTypeScriptFile` and `parseFile` are **async** because they dynamically `import("typescript")`
-at runtime, so the TypeScript compiler API is only loaded when actually needed.
-
-```ts
-type SymbolKind = "class" | "const" | "enum" | "function" | "interface" | "type" | "variable"
-
-interface SymbolInfo {
-  name: string              // declaration name
-  kind: SymbolKind
-  line: number              // 1-indexed line number
-  isExported: boolean
-}
-
-interface ImportInfo {
-  names: string[]            // imported identifiers (local names)
-  isDefault: boolean
-  isNamespace: boolean
-  isTypeOnly: boolean
-  moduleSpecifier: string
-}
-
-interface ExportInfo {
-  name: string               // exported name
-  localAlias?: string        // local name if renamed (e.g. `export { foo as bar }`)
-  isDefault: boolean
-  isNamespace: boolean
-  isTypeOnly: boolean
-  reExportFrom?: string      // present only for re-exports with a module specifier
-}
-
-interface ParseResult {
-  symbols: SymbolInfo[]
-  imports: ImportInfo[]
-  exports: ExportInfo[]
-  errors: string[]           // non-fatal (e.g. "typescript package is not installed",
-                             // or individual parse diagnostics captured from the TS compiler)
-}
-
-// Returned by linkSymbols — failures are observable, never silently swallowed as `0 symbols`.
-interface SymbolInsertResult {
-  count: number
-  errors: string[]           // parse errors + per-symbol DB errors (if any)
-  parseFailed: boolean       // true when the file could not be parsed (parse errors only)
-}
-
-// Dispatches by file extension. Returns null for unsupported extensions (.js, .py, etc.).
-async function parseFile(filePath: string, source: string): Promise<ParseResult | null>
-
-// Parses a single .ts/.tsx file. Returns a ParseResult with diagnostics in `errors`.
-async function parseTypeScriptFile(filePath: string, source: string): Promise<ParseResult>
-
-// Upserts symbols into the DB with full provenance. Parse errors short-circuit
-// (returns { count: 0, errors: [...], parseFailed: true }). Per-symbol DB errors
-// are collected in `errors` (returns { count: N, errors: [...], parseFailed: false }).
-async function linkSymbols(
-  repositoryId: string,
-  filePath: string,
-  source: string,
-  commitSha: string | null,
-): Promise<SymbolInsertResult>
-```
-
 ### Evidence policy
 
-| What is being recorded                         | EvidenceLevel      | Notes                                              |
-|------------------------------------------------|--------------------|----------------------------------------------------|
-| Entity read directly from a repository file    | `verified`         | Packages, modules, documents, symbols              |
-| AST-derived symbol declaration                 | `verified`         | Source code is the evidence                        |
-| Repository record (ingested repo)              | `verified`         | Source of truth: the repo itself                   |
-| `CONSUMES` relationship (from package.json)     | `inferred`         | Derived from manifest dependency, not the dep itself |
-| External npm package (placeholder)             | `inferred`        | Inferred from dependency reference, not ingested   |
-| Ingestion run record                           | `inferred`        | Run is a derived artifact, sourceType `inferred_pattern` |
-| `CONTAINS` relationship                        | `verified`        | Observed from repository structure                 |
-| Architectural decision (human statement)       | `verified`        | Human-asserted, confirmed by architect             |
-| `DependencyType` on a `CONSUMES` edge         | `inferred`        | Derived from which manifest section it appeared in |
+| What is being recorded                          | EvidenceLevel | sourceType       |
+|-------------------------------------------------|---------------|------------------|
+| Entity read directly from a repository file     | `verified`    | `file`           |
+| AST-derived symbol declaration                  | `verified`    | `file`           |
+| `CONTAINS` relationship (repo structure)        | `verified`    | `file`           |
+| Architectural decision (human statement)        | `verified`    | `human_statement`|
+| `CONSUMES` relationship (from package.json)     | `inferred`    | `file`           |
+| `REFERENCES` call-graph edge                    | `inferred`    | `file`           |
+| `VIOLATES` edge (detected)                      | `inferred`    | `file`           |
+| External npm package placeholder                | `inferred`    | `inferred_pattern`|
+| Ingestion run record                            | `inferred`    | `inferred_pattern`|
 
-**Key rule**: LLM/retrieval interpretation **never** carries repository evidence.
-The `inferred` level is only for facts derived from a repository's own files
-(e.g. a dependency edge derived from `package.json`). External packages that are
-not ingested are `inferred` from the reference alone — they have no `sourceCommitSha`
-and a synthetic `sourcePath` like `"npm:package-name"`.
+**Key rule**: LLM/retrieval interpretation **never** carries repository evidence. `inferred`
+is only for facts derived from a repository's own files (e.g. a dependency or call edge).
 
 ---
 
 ## `@fusorb/intel-provider`
 
+Provider-agnostic answer generation. Select a provider with `INTEL_PROVIDER`
+(`mock` | `anthropic` | `ollama` | `openrouter` | `openai`; default `mock`).
+
 ```ts
-interface Citation {
-  sourcePath: string
-  sourceCommitSha: string | null
-  evidenceLevel: string
+interface Citation { sourcePath: string; sourceCommitSha: string | null }
+interface Answer { text: string; citations: Citation[]; warnings: string[] }
+
+interface GenerateRequest {
+  question: string
+  context: string
+  messages?: Array<{ role: "system" | "user" | "assistant" | "tool"; content: string; tool?: string }>
+  tools?: unknown[]
 }
 
 interface IntelligenceProvider {
-  answer(question: string, context: string, citations: Citation[]): Promise<string>
-  extractCitations(text: string): Citation[]
-  checkUnsourcedClaims(text: string, citations: Citation[]): string[]
+  readonly providerName: string
+  readonly modelName: string
+  generate(request: GenerateRequest): Promise<Answer>
 }
+
+// Citation / evidence utilities
+const CITATION_REGEX: RegExp
+const DONT_KNOW_PATTERNS: RegExp[]
+function extractCitations(text: string): Citation[]
+function extractSourcePathsFromContext(context: string): string[]
+function checkUnsourcedClaims(text: string, citations: Citation[]): string[]
+function finalizeAnswer(text: string, context: string): Answer
+
+// Prompt
+const SYSTEM_PROMPT: string
+function buildMessages(request: GenerateRequest): Array<{ role: string; content: string; tool?: string }>
+
+// Implementations
+class MockProvider implements IntelligenceProvider
+class AnthropicProvider implements IntelligenceProvider   // AnthropicProviderOptions
+class OllamaProvider implements IntelligenceProvider      // OllamaProviderOptions
+class OpenRouterProvider implements IntelligenceProvider  // OpenRouterProviderOptions
+class OpenAIProvider implements IntelligenceProvider      // OpenAIProviderOptions
+
+// Factory
+const DEFAULT_PROVIDER: "mock"
+const VALID_PROVIDERS: readonly ["mock", "anthropic", "ollama", "openrouter", "openai"]
+class ProviderConfigurationError extends Error
+function createProvider(): IntelligenceProvider
 ```
+
+`OpenAIProvider` is generic OpenAI-compatible: set `OPENAI_BASE_URL` to Groq, Cerebras,
+Mistral, Gemini, GitHub Models, Cloudflare Workers AI, or a local server (LM Studio,
+llama.cpp, vLLM, Ollama `/v1`). `OPENAI_API_KEY` is optional — local servers need none.
 
 ---
 
 ## `@fusorb/intel-retrieval`
 
+Keyword search, graph traversal, symbol lookup, and context formatting. Every result carries
+provenance; all queries filter `removedAt: null` (soft-deleted rows are excluded).
+
 ```ts
+interface ProvenanceInfo {
+  sourcePath: string; sourceType: string; sourceCommitSha: string | null
+  firstSeenAt: Date; retrievedAt: Date; evidenceLevel: string; removedAt: Date | null
+}
 interface RetrievedEntity {
-  entityType: string
-  id: string
-  name: string
-  path: string
-  description: string | null
-  content: string | null
-  provenance: ProvenanceInfo
-  score: number
-  repositoryName?: string | null   // populated when known; null when not
+  entityType: string; id: string; name: string; path: string
+  description: string | null; content: string | null
+  provenance: ProvenanceInfo; score: number; repositoryName?: string | null
 }
-
-interface RetrievedDocument {
-  path: string
-  repositoryName?: string | null
-  content: string | null
-  provenance: ProvenanceInfo
-  score: number
-}
-
 interface RetrievedRelationship {
-  id: string
-  kind: string
-  fromId: string
-  fromType: string
-  fromName: string
-  toId: string
-  toType: string
-  toName: string
-  note: string | null
-  depType: string | null
-  evidenceLevel: string
-  repositoryName: string | null
+  id: string; kind: string
+  fromId: string; fromType: string; fromName: string
+  toId: string; toType: string; toName: string
+  note: string | null; depType: string | null
+  provenance: ProvenanceInfo; score: number
+}
+interface RetrievedDocument {
+  path: string; repositoryName?: string | null
+  content: string | null; provenance: ProvenanceInfo; score: number
+}
+interface RetrievalResult { entities: RetrievedEntity[]; relationships: RetrievedRelationship[]; documents: RetrievedDocument[] }
+
+interface DependencyInfo {
+  targetName: string; targetRepository: string | null; targetIsExternal: boolean
+  range: string | null; depType: string | null; provenance: ProvenanceInfo
+}
+interface PackageDependencies {
+  packageName: string; repositoryName: string
+  dependencies: DependencyInfo[]; provenance: ProvenanceInfo
 }
 
-interface RetrievalResult {
-  entities: RetrievedEntity[]
-  relationships: RetrievedRelationship[]
-  documents: RetrievedDocument[]
-}
+interface SearchOptions { repositoryName?: string; onlyExternal?: boolean }
+interface RetrieveOptions { limit?: number; repositoryName?: string }
+interface FindSymbolOptions { repositoryName?: string; kind?: string; limit?: number }
 
 function extractKeywords(question: string): string[]
 
-async function searchPackage(query: string, includeExternal?: boolean): Promise<RetrievedEntity[]>
+async function searchPackage(name: string, includeExternal = false): Promise<RetrievedEntity[]>
 async function searchRepository(name: string): Promise<RetrievedEntity[]>
+async function searchContent(query: string, limit = 20, options?: SearchOptions): Promise<RetrievalResult>
 
-interface SearchOptions {
-  query: string
-  includeExternal?: boolean
-  includeRelationships?: boolean
-  keywordLimit?: number
-  entityLimit?: number
-}
-async function searchContent(options: SearchOptions): Promise<RetrievalResult>
+async function getDependencies(repositoryName: string): Promise<RetrievalResult>
+async function getPackageDependencies(repositoryName: string, packageName: string): Promise<PackageDependencies | null>
+async function getDependents(packageName: string, options?: { repositoryName?: string }): Promise<RetrievalResult>
+async function traverseRelationships(entityId: string, entityType: EntityType,
+  kinds?: RelationshipKind[]): Promise<RetrievedRelationship[]>
+async function readDocumentContent(repositoryName: string, path: string): Promise<RetrievedDocument | null>
 
-async function getDependencies(
-  repositoryName: string,
-  packageName: string,
-  includeExternal: boolean,
-): Promise<RetrievalResult>
-
-async function getPackageDependencies(
-  repositoryName: string,
-  packageName: string,
-  includeExternal: boolean,
-): Promise<PackageDependencies>
-
-async function getDependents(
-  repositoryName: string,
-  packageName: string,
-  includeExternal: boolean,
-): Promise<RetrievalResult>
-
-async function traverseRelationships(
-  fromEntityId: string,
-  fromEntityType: string,
-  kinds: string[],
-  depth?: number,
-): Promise<RetrievedRelationship[]>
-
-async function readDocumentContent(
-  repositoryName: string,
-  contentPath: string,
-): Promise<string>
-
+// Governance / decisions
 async function getActiveDecisions(): Promise<RetrievedEntity[]>
 async function getDecisionViolations(): Promise<RetrievalResult>
-async function getGovernedEntities(options: { entityType?: string; relationshipType?: string }): Promise<RetrievalResult>
+async function getGovernedEntities(decisionId: string): Promise<RetrievalResult>
 
-interface RetrieveOptions {
-  limit?: number
-  repositoryName?: string
-}
+// Symbol lookup
+async function findSymbol(name: string, options?: FindSymbolOptions): Promise<RetrievedEntity[]>
+async function findCallers(symbolId: string, symbolName?: string): Promise<RetrievalResult>
+async function findReferences(symbolId: string): Promise<RetrievalResult>
+
+// Main entry point + formatting
 async function retrieve(question: string, options?: RetrieveOptions): Promise<RetrievalResult>
-
 function formatContext(result: RetrievalResult): string
 ```
 
@@ -376,17 +392,52 @@ function formatContext(result: RetrievalResult): string
 
 ## `@fusorb/intel-tools`
 
-Read-only wrappers around retrieval. Provides a `ToolResult` interface for use in agentic
-loops:
+Read-only wrappers over retrieval plus a tool registry for the agent loop.
 
 ```ts
-interface ToolResult<T> {
-  success: boolean
-  data: T | null
-  error?: string
+interface ToolResult<T> { data: T; source: string }
+interface ToolParameter { name: string; type: string; description: string; required?: boolean }
+interface ToolDefinition {
+  name: string; description: string
+  parameters: ToolParameter[]
+  handler: (args: Record<string, unknown>) => Promise<unknown>
 }
 
-async function searchRepo(query: string, opts?: { includeExternal?: boolean }): Promise<string>
-async function readDocument(name: string): Promise<string>
-async function inspectDependencies(name: string, opts?: { includeExternal?: boolean }): Promise<string>
+function registerTool(tool: ToolDefinition): void
+function getToolDefinitions(): ToolDefinition[]
+function executeTool(name: string, args: Record<string, unknown>): Promise<unknown>
+
+// Tools
+async function searchRepo(query: string): Promise<ToolResult<RetrievalResult>>
+async function readDocument(repositoryName: string, path: string): Promise<ToolResult<RetrievedDocument | null>>
+async function inspectDependencies(repositoryName: string, packageName: string): Promise<ToolResult<PackageDependencies | null>>
+async function findSymbol(name: string, options?: FindSymbolOptions): Promise<ToolResult<RetrievedEntity[]>>
+async function findCallers(symbolId: string, symbolName?: string): Promise<ToolResult<RetrievalResult>>
+async function findReferences(symbolId: string): Promise<ToolResult<RetrievalResult>>
 ```
+
+Registered tool names: `search_repo`, `read_document`, `inspect_dependencies`,
+`find_symbol`, `find_callers`, `find_references`.
+
+---
+
+## `@fusorb/intel-agent`
+
+Multi-step tool-calling loop. Drives a provider and the tool registry. Used via
+`pnpm ask "<question>" --agent`.
+
+```ts
+interface AgentOptions { maxSteps?: number; provider?: IntelligenceProvider }
+interface AgentResult {
+  answer: string
+  citations: Citation[]
+  warnings: string[]
+  steps: number
+  toolCalls: Array<{ tool: string; args: unknown; result: unknown }>
+}
+
+async function runAgent(question: string, options?: AgentOptions): Promise<AgentResult>
+```
+
+The loop asks the provider to either answer or call a tool (JSON action), executes tool calls
+against `@fusorb/intel-tools`, feeds results back, and stops at `maxSteps` (default 5).

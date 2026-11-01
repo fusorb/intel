@@ -8,6 +8,7 @@
     { "path": "packages/retrieval" },
     { "path": "packages/provider" },
     { "path": "packages/tools" },
+    { "path": "packages/agent" },
     { "path": "tests" }
   ]
 }
