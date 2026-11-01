@@ -26,6 +26,7 @@ interface RepoSnapshot {
   symbolIds: string[]
   containsRelIds: string[]
   consumesRelIds: string[]
+  referencesRelIds: string[]
 }
 async function snapshotRepo(repoName: string): Promise<RepoSnapshot | null> {
   const repo = await prisma.repository.findFirst({
@@ -53,6 +54,22 @@ async function snapshotRepo(repoName: string): Promise<RepoSnapshot | null> {
     select: { id: true },
   })
 
+  // REFERENCES edges originate from symbols. markStale() stales them for every
+  // symbol in the repo (active or not), so capture the active ones across all
+  // the repo's symbols to restore them exactly.
+  const allSymIds = (
+    await prisma.symbol.findMany({ where: { repositoryId: repo.id }, select: { id: true } })
+  ).map((s) => s.id)
+  const references = await prisma.relationship.findMany({
+    where: {
+      fromEntityId: { in: allSymIds },
+      fromEntityType: "SYMBOL",
+      kind: "REFERENCES",
+      removedAt: null,
+    },
+    select: { id: true },
+  })
+
   return {
     id: repo.id,
     pkgIds,
@@ -61,6 +78,7 @@ async function snapshotRepo(repoName: string): Promise<RepoSnapshot | null> {
     symbolIds: syms.map((s) => s.id),
     containsRelIds: contains.map((r) => r.id),
     consumesRelIds: consumes.map((r) => r.id),
+    referencesRelIds: references.map((r) => r.id),
   }
 }
 
@@ -72,6 +90,7 @@ async function restoreRepo(snap: RepoSnapshot): Promise<void> {
   await prisma.symbol.updateMany({ where: { id: { in: snap.symbolIds } }, data: { removedAt: null } })
   await prisma.relationship.updateMany({ where: { id: { in: snap.containsRelIds } }, data: { removedAt: null } })
   await prisma.relationship.updateMany({ where: { id: { in: snap.consumesRelIds } }, data: { removedAt: null } })
+  await prisma.relationship.updateMany({ where: { id: { in: snap.referencesRelIds } }, data: { removedAt: null } })
 }
 
 describe("markStale marks relationships stale", () => {

@@ -44,9 +44,32 @@ ollama-integration skipped) all pass; `pnpm verify` reports 3/3.
   `VIOLATES` edges (retired `@arcevo/*` scope, shadcn-style UI deps, missing
   `AGENTS.md`/`CLAUDE.md`). Idempotent; re-run after `pnpm ingest:all`.
 
+## Graph refreshed 2026-11-01
+
+Re-ingested all four product repos onto their latest commits (all four had moved
+since the 2026-10-31 refresh) and re-verified.
+
+| Repo | Commit | Packages | Modules | Symbols | Documents |
+|---|---|---|---|---|---|
+| facet | `9f3672f1` | 18 | 48 | 3817 | 40 |
+| sovgrant | `91c36ab7` | 2 | 125 | 2141 | 12 |
+| relnex | `fefa6f51` | 2 | 75 | 1114 | 6 |
+| sovport | `9f4f7e18` | 1 | 10 | 214 | 8 |
+
+`pnpm -r typecheck`, `pnpm -r build`, and `pnpm test:run` (139 passed, 2
+ollama-integration skipped) all pass; `pnpm verify` reports 3/3. The active graph
+holds 1157 `REFERENCES` edges.
+
+- **Call graph**: ingestion now extracts `REFERENCES` edges between symbols
+  (direct + method calls, attributed to the enclosing declaration).
+  `find_symbol` / `find_callers` / `find_references` read these edges, and the
+  `pnpm ask --agent` loop traverses them.
+- **Test hygiene**: the ingestion-lifecycle snapshot/restore helper now covers
+  `REFERENCES` edges and restores only the ids that were active at snapshot time,
+  so running the suite no longer strands call-graph edges or resurrects stale rows.
+
 ## Outstanding for this repo
 
 - Naming: none outstanding. The remaining `arc*` / `@arcevo` strings are
   deliberate history or examples, not un-migrated code.
-- Commit the `scripts/verify.ts` soft-delete fix and this ledger update.
 
