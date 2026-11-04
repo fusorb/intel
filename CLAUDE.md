@@ -31,6 +31,9 @@ This repo is **Tier-1 infra**. It is not a product that ships to end users.
   `readDocument`, `inspectDependencies`, `findSymbol`, `findCallers`, `findReferences`).
 - **Agent**: `packages/agent` — multi-step tool-calling loop (`runAgent`) over the provider
   and tool registry; used via `pnpm ask --agent`.
+- **API**: `apps/api` — thin, read-only HTTP service (Hono) over the graph, the surface for
+  the internal tool at `intel.fusorb.com`. Single-user bearer-token auth by default;
+  routes: `/health`, `/ask`, `/ask/agent`, `/search`, `/symbols*`, `/decisions`, `/violations`.
 - **Governance**: `packages/ingest` also holds the authored `Decision` seed
   (`decisions.ts`) and the governance engine (`governance.ts`) — `runGovernance()` upserts
   decisions by stable `key`, writes `GOVERNS` edges, and detects `VIOLATES` edges. Run it
@@ -41,8 +44,8 @@ This repo is **Tier-1 infra**. It is not a product that ships to end users.
 ## Still deferred
 
 - Embedding / hybrid retrieval (not yet in `packages/retrieval`)
-- `apps/api` — any API/console surface
-- Any UI
+- A web UI / architecture explorer (would be built on Facet, per the ecosystem invariant)
+- External-contributor access to the graph (current posture is internal-only)
 
 ## Quick start
 
@@ -117,5 +120,6 @@ pnpm seed:governance
 | `pnpm ingest <url> [--branch <branch>]` | Ingest a single repo |
 | `pnpm ingest:all` | Ingest all 4 repos (facet, sovgrant, relnex, sovport) |
 | `pnpm ask "<question>" [--agent]` | Ask a question — single-shot, or the multi-step agent |
+| `pnpm --filter @fusorb/intel-api dev` | Run the internal read-only API (`apps/api`) |
 | `pnpm verify` | Run the throwaway verification script (3 acceptance facts) |
 | `pnpm seed:governance` | Seed authored decisions and (re)compute GOVERNS/VIOLATES edges |

@@ -4,7 +4,7 @@ export default defineConfig({
   test: {
     environment: "node",
     envFile: false,
-    include: ["tests/**/*.test.ts", "packages/**/test/**/*.test.ts"],
+    include: ["tests/**/*.test.ts", "packages/**/test/**/*.test.ts", "apps/**/test/**/*.test.ts"],
     setupFiles: ["tests/setup.ts"],
     fileParallelism: false, // DB-backed tests share one database — run sequentially
     testTimeout: 30000,

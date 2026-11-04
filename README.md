@@ -338,6 +338,34 @@ pnpm ask "Find all callers of function parseTypeScriptFile" --agent
 
 The agent can use `search_repo`, `read_document`, `inspect_dependencies`, `find_symbol`, `find_callers`, and `find_references`. `find_callers`/`find_references` use REFERENCES edges when available, with best-effort fallbacks.
 
+### API (`apps/api`)
+
+`apps/api` is a thin, **read-only** HTTP service over the graph — the surface for the internal
+tool at `intel.fusorb.com`. It wraps the same packages the CLI uses and never exposes SQL or an
+arbitrary tool.
+
+```bash
+pnpm --filter @fusorb/intel-api dev      # tsx src/index.ts
+pnpm --filter @fusorb/intel-api build    # tsup → apps/api/dist
+node apps/api/dist/index.js              # requires INTEL_API_TOKEN in token mode
+```
+
+Auth is a single-user bearer token by default (`INTEL_API_AUTH=token` + `INTEL_API_TOKEN`);
+`cloudflare-access` trusts the edge identity header instead; `none` is development-only. The
+server refuses to start in token mode without a token.
+
+| Method | Path | Purpose |
+|---|---|---|
+| `GET`  | `/health` | Liveness + database probe (unauthenticated) |
+| `POST` | `/ask` | Single-shot answer (retrieve → prompt → provider) |
+| `POST` | `/ask/agent` | Multi-step agent answer (returns tool names) |
+| `GET`  | `/search?q=&repo=` | Keyword search |
+| `GET`  | `/symbols?name=&repo=&kind=` | Symbol lookup |
+| `GET`  | `/symbols/:id/callers` · `/references` | Call-graph lookups |
+| `GET`  | `/decisions` · `/violations` | Governance |
+
+Configuration lives in `.env.example` (`INTEL_API_*`).
+
 ---
 
 ## Development workflow

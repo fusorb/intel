@@ -200,6 +200,25 @@ importers:
         specifier: ^1.0.0
         version: 1.6.1(@types/node@22.20.4)
 
+  apps/api:
+    dependencies:
+      '@fusorb/intel-agent':
+        specifier: workspace:*
+        version: link:../../packages/agent
+      '@fusorb/intel-graph':
+        specifier: workspace:*
+        version: link:../../packages/graph
+      '@fusorb/intel-provider':
+        specifier: workspace:*
+        version: link:../../packages/provider
+      '@fusorb/intel-retrieval':
+        specifier: workspace:*
+        version: link:../../packages/retrieval
+    devDependencies:
+      tsup:
+        specifier: ^8.5.1
+        version: 8.5.1(jiti@2.7.0)(postcss@8.5.28)(tsx@4.23.13)(typescript@5.9.3)
+
   packages/agent:
     dependencies:
       '@fusorb/intel-graph':

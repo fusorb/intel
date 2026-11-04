@@ -52,6 +52,8 @@ fusorb/intel
 │   ├── retrieval/             # Keyword search, graph traversal, symbol lookup, context formatting
 │   ├── tools/                 # Read-only tool surface + registry (searchRepo, findSymbol, ...)
 │   └── agent/                 # Agentic multi-step tool-calling loop (runAgent)
+├── apps/
+│   └── api/                   # Internal read-only HTTP service (Hono) → intel.fusorb.com
 ├── tests/                     # Cross-package acceptance suite + shared setup
 ├── scripts/verify.ts          # Throwaway validation script (3 acceptance facts)
 ├── scripts/ask.ts             # Question-answering CLI entry point

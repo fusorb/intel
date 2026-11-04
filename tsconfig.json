@@ -9,6 +9,7 @@
     { "path": "packages/provider" },
     { "path": "packages/tools" },
     { "path": "packages/agent" },
+    { "path": "apps/api" },
     { "path": "tests" }
   ]
 }

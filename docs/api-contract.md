@@ -441,3 +441,12 @@ async function runAgent(question: string, options?: AgentOptions): Promise<Agent
 
 The loop asks the provider to either answer or call a tool (JSON action), executes tool calls
 against `@fusorb/intel-tools`, feeds results back, and stops at `maxSteps` (default 5).
+
+---
+
+## `@fusorb/intel-api` (application, not a library)
+
+`apps/api` is a thin, read-only HTTP service — the surface for the internal tool at
+`intel.fusorb.com`. It is an application, not an importable package. Routes (`/health`, `/ask`,
+`/ask/agent`, `/search`, `/symbols`, `/symbols/:id/{callers,references}`, `/decisions`,
+`/violations`) are documented in `README.md`; the handlers live in `apps/api/src/server.ts`.
