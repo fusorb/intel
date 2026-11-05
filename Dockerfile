@@ -16,8 +16,18 @@ RUN pnpm --filter @fusorb/intel-api build
 # the simplest correct layout; it can be slimmed later with `pnpm deploy`.
 FROM node:22-slim AS runtime
 ENV NODE_ENV=production
+# pnpm for migrations; git for in-container ingest.
+RUN corepack enable \
+  && apt-get update \
+  && apt-get install -y --no-install-recommends git ca-certificates \
+  && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY --from=build /app /app
+# The admin scripts (ingest/seed/verify) run `tsx --env-file=.env`, and Node errors
+# when that file is missing — provide an empty one so they use the container env,
+# plus a writable scratch dir for repo clones.
+RUN touch /app/.env && mkdir -p /app/.agent \
+  && chown -R node:node /app/.env /app/.agent
 USER node
 EXPOSE 8787
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \

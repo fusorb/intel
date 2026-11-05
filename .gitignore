@@ -19,6 +19,7 @@ node_modules
 # Environment variables & secrets (NEVER commit these)
 .env
 .env*.local
+.env.deploy
 .env.development.local
 .env.test.local
 .env.production.local

@@ -375,6 +375,8 @@ Configuration lives in `.env.example` (`INTEL_API_*`).
 
 Full operational steps are in [`docs/deploy.md`](./docs/deploy.md): database, access (Cloudflare Access or token), data-egress policy, and host options.
 
+The chosen stack is **a VPS behind Cloudflare** — `docker-compose.yml` runs `api` + `db` + `cloudflared` (with an optional self-hosted `ollama`), so no inbound ports are open.
+
 ---
 
 ## Development workflow

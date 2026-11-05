@@ -1,0 +1,80 @@
+# Intel — VPS + Cloudflare deployment.
+#
+# Nothing is published to the host: `api` and `db` sit on a private bridge
+# network and are ONLY reachable through the Cloudflare Tunnel. Point the
+# tunnel's public hostname at http://api:8787 (see docs/deploy.md).
+#
+#   docker compose --env-file .env.deploy up -d
+#
+name: intel
+
+services:
+  api:
+    image: ghcr.io/fusorb/intel/intel-api:latest
+    # build: .            # use this instead of `image:` to build locally
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: "8787"
+      DATABASE_URL: "postgresql://intel:${POSTGRES_PASSWORD}@db:5432/intel?schema=public"
+      INTEL_API_AUTH: ${INTEL_API_AUTH:-cloudflare-access}
+      INTEL_PROVIDER: ${INTEL_PROVIDER:-ollama}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://ollama:11434}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.2:latest}
+    depends_on:
+      db:
+        condition: service_healthy
+    networks: [internal]
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:8787/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  db:
+    image: postgres:18
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: intel
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: intel
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    networks: [internal]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U intel -d intel"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # Optional self-hosted model — start with: docker compose --profile ollama up -d
+  ollama:
+    image: ollama/ollama:latest
+    profiles: ["ollama"]
+    restart: unless-stopped
+    volumes:
+      - ollama-data:/root/.ollama
+    networks: [internal]
+
+  # Outbound-only tunnel; terminates TLS and applies Cloudflare Access at the edge.
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN}
+    depends_on: [api]
+    networks: [internal]
+
+volumes:
+  db-data:
+  ollama-data:
+
+networks:
+  internal:
+    driver: bridge
