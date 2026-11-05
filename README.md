@@ -373,6 +373,8 @@ Configuration lives in `.env.example` (`INTEL_API_*`).
 - **Migrations:** dev uses `pnpm prisma:push`; production uses `pnpm prisma:migrate` (`prisma migrate deploy`) against the committed baseline in `schemas/migrations/`.
 - **Host:** provide a private/managed Postgres, inject `DATABASE_URL` and `INTEL_API_*` from the platform's secret store, and terminate TLS at the edge. The API binds `0.0.0.0:$PORT` behind the platform proxy.
 
+Full operational steps are in [`docs/deploy.md`](./docs/deploy.md): database, access (Cloudflare Access or token), data-egress policy, and host options.
+
 ---
 
 ## Development workflow
