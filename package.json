@@ -16,6 +16,8 @@
     "prisma:generate": "prisma generate",
     "prisma:push": "prisma db push",
     "prisma:migrate": "prisma migrate deploy",
+    "sync:fusorb": "node tools/consumer/sync-fusorb.mjs --profile full",
+    "check:fusorb": "node tools/consumer/sync-fusorb.mjs --check --profile full",
     "prisma:studio": "prisma studio",
     "ingest": "tsx --env-file=.env packages/ingest/src/cli.ts",
     "ingest:all": "pnpm ingest https://github.com/fusorb/facet.git && pnpm ingest https://github.com/fusorb/sovgrant.git && pnpm ingest https://github.com/fusorb/relnex.git && pnpm ingest https://github.com/fusorb/sovport.git",

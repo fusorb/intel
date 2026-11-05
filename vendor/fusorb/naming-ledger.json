@@ -1,0 +1,129 @@
+{
+  "schemaVersion": 1,
+  "allow": [
+    "**/CHANGELOG.md",
+    ".changeset/**",
+    "decisions/**",
+    "docs/**/evidence/**",
+    "ecosystem/naming-ledger.json",
+    "content/standards/naming.md"
+  ],
+  "entries": [
+    {
+      "id": "arcui-to-facet",
+      "class": "renamed",
+      "from": ["ArcUI"],
+      "patterns": ["\\bArcUI\\b", "\\barcui\\b"],
+      "to": "Facet",
+      "evidence": "ecosystem.json products[0].legacyNames; facet/README.md",
+      "examples": {
+        "match": ["ArcUI", "arcui"],
+        "noMatch": ["ArcevoCirqle", "arcevocirqle.com.ng", "contact@arcevocirqle.com.ng"]
+      }
+    },
+    {
+      "id": "arcid-to-sovgrant",
+      "class": "renamed",
+      "from": ["ArcID", "Arc-ID", "arc-id", "arcid"],
+      "patterns": ["\\bArcID\\b", "\\bArc-ID\\b", "\\barc-id\\b", "\\barcid\\b(?!_)"],
+      "to": "SovGrant",
+      "notes": "standalone product/service name only; the arcid_* storage keys are a separate entry",
+      "evidence": "ecosystem.json products[1].legacyNames",
+      "examples": {
+        "match": ["ArcID", "Arc-ID", "arc-id", "the arcid service"],
+        "noMatch": ["arcid_access_token", "arcid_refresh_token", "ArcevoCirqle", "arcevocirqle.com.ng"]
+      }
+    },
+    {
+      "id": "arcbase-to-relnex",
+      "class": "renamed",
+      "from": ["ArcBase", "Arcbase"],
+      "patterns": ["\\bArcBase\\b", "\\bArcbase\\b", "\\barcbase\\b"],
+      "to": "Relnex",
+      "evidence": "ecosystem.json products[2].legacyNames; relnex migrated to the current name (owner-confirmed 2026-10-31)",
+      "examples": {
+        "match": ["ArcBase", "Arcbase", "arcbase"],
+        "noMatch": ["ArcevoCirqle", "arcevocirqle.com.ng"]
+      }
+    },
+    {
+      "id": "arcwallet-to-sovport",
+      "class": "renamed",
+      "from": ["ArcWallet"],
+      "patterns": ["\\bArcWallet\\b", "\\barcwallet\\b"],
+      "to": "SovPort",
+      "evidence": "ecosystem.json products[3].legacyNames",
+      "examples": {
+        "match": ["ArcWallet", "arcwallet"],
+        "noMatch": ["ArcevoCirqle", "arcevocirqle.com.ng"]
+      }
+    },
+    {
+      "id": "arcevo-scope-to-fusorb",
+      "class": "renamed",
+      "from": ["@arcevo/"],
+      "patterns": ["@arcevo/"],
+      "to": "@fusorb/",
+      "notes": "the trailing slash is mandatory so it matches only the npm scope, never a live name",
+      "evidence": "ecosystem.json npmScopes (retired); @arcevo/facet-auth returns 404 on the registry",
+      "examples": {
+        "match": ["@arcevo/facet-auth", "@arcevo/facet-sdk"],
+        "noMatch": ["@fusorb_hq", "@fusorb/facet-auth"]
+      }
+    },
+    {
+      "id": "arcevodev-to-fusorb",
+      "class": "renamed",
+      "from": ["ArcevoDev"],
+      "patterns": ["\\bArcevoDev\\b"],
+      "to": "fusorb",
+      "evidence": "ecosystem.json orgs[2] (retired)",
+      "examples": {
+        "match": ["ArcevoDev"],
+        "noMatch": ["ArcevoCirqle", "arcevocirqle.com.ng"]
+      }
+    },
+    {
+      "id": "arc-identifiers-to-sg",
+      "class": "renamed",
+      "from": ["ArcIdClient", "ArcIdClientConfig", "ArcProvider", "ArcProviderProps"],
+      "patterns": ["\\bArcIdClient\\b", "\\bArcIdClientConfig\\b", "\\bArcProvider\\b", "\\bArcProviderProps\\b"],
+      "to": "SgClient, SgClientConfig, SgProvider, SgProviderProps",
+      "availableIn": { "@fusorb/facet-auth": "2.0.0", "@fusorb/facet-sdk": "2.0.0" },
+      "adoptWith": ["@fusorb/facet-store", "@fusorb/facet-layout", "@fusorb/facet-docs"],
+      "notes": "available in auth>=2.0.0 and sdk>=2.0.0; adopt in the same change as store>=1.0.2, layout>=1.6.0, docs>=1.5.8 (older versions pin auth exactly and install a second copy)",
+      "evidence": "@fusorb/facet-sdk@2.0.0 and @fusorb/facet-auth@2.0.0 tarballs export SgClient/SgProvider (verified 2026-10-25)",
+      "examples": {
+        "match": ["ArcIdClient", "ArcIdClientConfig", "ArcProvider", "ArcProviderProps"],
+        "noMatch": ["SgClient", "SgProvider", "ArcevoCirqle", "arcevocirqle.com.ng"]
+      }
+    },
+    {
+      "id": "arcid-storage-keys-to-sg",
+      "class": "renamed",
+      "from": ["arcid_access_token", "arcid_refresh_token"],
+      "patterns": ["\\barcid_access_token\\b", "\\barcid_refresh_token\\b"],
+      "to": "sg_access_token, sg_refresh_token",
+      "availableIn": { "@fusorb/facet-auth": "2.0.0" },
+      "notes": "stored sessions are not migrated, users re-authenticate",
+      "evidence": "@fusorb/facet-auth@2.0.0 tarball uses sg_access_token/sg_refresh_token (verified 2026-10-25)",
+      "examples": {
+        "match": ["arcid_access_token", "arcid_refresh_token"],
+        "noMatch": ["sg_access_token", "sg_refresh_token", "arcevocirqle.com.ng"]
+      }
+    },
+    {
+      "id": "arcevocirqle-live",
+      "class": "live",
+      "from": ["ArcevoCirqle", "arcevocirqle", "arcevocirqle.com.ng", "@fusorb_hq"],
+      "patterns": ["\\bArcevoCirqle\\b", "\\barcevocirqle\\b", "\\barcevocirqle\\.com\\.ng\\b", "@fusorb_hq\\b"],
+      "to": null,
+      "notes": "the public brand and domain; never rename. Live social: @fusorb_hq on X and the LinkedIn company page (linkedin.com/company/arcevocirqle)",
+      "evidence": "ecosystem.json layers[1] and domains[0] (live); docs/foundation/owner-questions.md",
+      "examples": {
+        "match": ["ArcevoCirqle", "arcevocirqle", "arcevocirqle.com.ng", "contact@arcevocirqle.com.ng", "@fusorb_hq"],
+        "noMatch": []
+      }
+    }
+  ]
+}

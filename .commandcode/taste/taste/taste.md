@@ -36,3 +36,4 @@
 - When a background daemon (e.g., Ollama) is stuck consuming memory or not responding, force-kills it (`taskkill /f /im <name>.exe`) and restarts it rather than retrying against a degraded state. Confidence: 0.8
 - Uses short-timeout `curl --max-time` probes for service health checks (e.g., `curl -s --max-time 5 http://localhost:11434/api/tags`) to detect daemon readiness without hanging indefinitely. Confidence: 0.75
 - Responds to yes/no questions with a direct "Yes"/"No" followed by brief supporting specifics, rather than elaborating first. Confidence: 0.7
+- Works on a resource-constrained machine (8 GB RAM, ~320 GB HDD laptop) and wants to avoid heavy local runtimes — a past Docker installation crashed/overheated the machine and suffered constant updates, so prioritizes minimal-footprint local tooling and avoids installing memory/CPU-heavy tooling (e.g., Docker Desktop) on this laptop. Confidence: 0.75
