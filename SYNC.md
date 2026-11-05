@@ -6,7 +6,7 @@ Source of truth for the ecosystem: the Fusorb architecture repo
 - Naming: `ecosystem/naming-ledger.json`
 - Standards: `content/standards/`
 
-Last checked: 2026-10-31, against fusorb `424e31c`.
+Last checked: 2026-11-05, against fusorb `634cef02`.
 
 ## Refreshed 2026-10-31
 
@@ -68,8 +68,42 @@ holds 1157 `REFERENCES` edges.
   `REFERENCES` edges and restores only the ids that were active at snapshot time,
   so running the suite no longer strands call-graph edges or resurrects stale rows.
 
+## Refreshed 2026-11-05
+
+The architecture repo had moved 3 commits (`424e31c` → `634cef02`), and its own
+`docs/foundation/intel-decisions-audit.md` audited our decision seed. Re-ingested
+the two product repos that had moved (`facet`, `sovgrant`; `relnex`/`sovport`
+unchanged) and re-verified.
+
+| Repo | Commit | Packages | Modules | Symbols | Documents |
+|---|---|---|---|---|---|
+| facet | `73402a60` | 18 | 48 | 3859 | 41 |
+| sovgrant | `cd6f52a5` | 2 | 125 | 2148 | 13 |
+| relnex | `fefa6f51` | 2 | 75 | 1114 | 6 |
+| sovport | `9f4f7e18` | 1 | 10 | 214 | 8 |
+
+`pnpm verify` reports 3/3; governance re-seeded (6 decisions, **21** GOVERNS
+edges, 0 VIOLATES); the active graph holds 1154 `REFERENCES` edges.
+
+- **`identity-authority` corrected** per the audit and ADR 0007: the statement is
+  now sourced from `decisions/0007-identity-authority.md` (the old prose was
+  `ecosystem.json`-cited but not present verbatim), and `governs` is
+  `[sovgrant, relnex, sovport]` (was `[relnex, sovport]`) — hence 21 edges.
+- **`agent-protocol` extended** with the new agent-tool-files policy
+  (track `.commandcode/taste/**`; ignore the rest).
+- **`.gitignore`**: adopted the pattern pair `/.commandcode/*` +
+  `!/.commandcode/taste/` + `!/.commandcode/taste/**` (verified with
+  `git check-ignore`), so `.commandcode/taste/**` is tracked.
+- Pinned arch commit bumped to `634cef02`.
+
 ## Outstanding for this repo
 
+- **Retire `SYNC.md` (ADR 0008).** The consumer-sync standard supersedes this file
+  with a vendored snapshot (`vendor/fusorb/` + `PROVENANCE.json` via
+  `tools/consumer/sync-fusorb.mjs`, profiles `names|full`). Not yet migrated.
+- **Ingest ADRs.** `docs/foundation/intel-ingest-contract.md` says `decisions/*.md`
+  are canonical, with the `## Decision` section as the statement to extract —
+  today the decision seed is hand-authored prose. ADR 0007/0008 are `Proposed`.
 - Naming: none outstanding. The remaining `arc*` / `@arcevo` strings are
   deliberate history or examples, not un-migrated code.
 

@@ -3,9 +3,10 @@
  *
  * These are NOT ingested from repo files — they are the ecosystem's architectural
  * invariants, transcribed from the Fusorb architecture repo
- * (`poetic-dev/fusorb@424e31c`): `ecosystem/ecosystem.json`, the naming ledger,
- * and `content/standards/*`. This file is the committed source of truth; edit it
- * and re-run `pnpm seed:governance` to converge the graph.
+ * (`poetic-dev/fusorb@634cef02`): `ecosystem/ecosystem.json`, the naming ledger,
+ * the ADRs in `decisions/*.md`, and `content/standards/*`. This file is the
+ * committed source of truth; edit it and re-run `pnpm seed:governance` to
+ * converge the graph.
  */
 
 export interface DecisionTarget {
@@ -28,7 +29,7 @@ export interface DecisionSeed {
   governs: DecisionTarget[]
 }
 
-const ARCH_REPO_COMMIT = "424e31c"
+const ARCH_REPO_COMMIT = "634cef02"
 
 const repo = (repository: string): DecisionTarget => ({ type: "REPOSITORY", repository })
 
@@ -67,11 +68,11 @@ export const ECOSYSTEM_DECISIONS: DecisionSeed[] = [
     key: "identity-authority",
     title: "SovGrant is the canonical identity and access layer",
     statement:
-      "SovGrant is the ecosystem's canonical identity and access layer — it owns passwords, MFA, sessions, OAuth, and credentials. Consumers (Relnex, SovPort) delegate authentication to it rather than implementing their own. The identity bridge is fixed: a consumer's User.identityId is the SovGrant Identity.id, and the JWT sub claim is that Identity.id.",
+      "SovGrant is the single Identity Provider (IdP) for the ecosystem. Every consumer — first-party and third-party relying parties — delegates authentication to SovGrant and never owns credentials; the integration contract is OIDC, and new relying parties integrate as OIDC clients using authorization code with PKCE. SovGrant owns identity, credentials (password/WebAuthn/passkeys/MFA), sessions and tokens, federation, consent, lifecycle, and org/tenant membership, roles, and scopes. Relying parties key local data by a reference to the canonical identity (identityId), must not mirror identity attributes as authority, and verify tokens locally via JWKS (shared-secret verification is a temporary, first-party-only shortcut to retire). The canonical identity reference is the SovGrant Identity.id; the JWT sub claim is that Identity.id.",
     status: "active",
-    sourcePath: "ecosystem/ecosystem.json",
+    sourcePath: "decisions/0007-identity-authority.md",
     sourceCommitSha: ARCH_REPO_COMMIT,
-    governs: [repo("relnex"), repo("sovport")],
+    governs: [repo("sovgrant"), repo("relnex"), repo("sovport")],
   },
   {
     key: "repo-structure-baseline",
@@ -87,7 +88,7 @@ export const ECOSYSTEM_DECISIONS: DecisionSeed[] = [
     key: "agent-protocol",
     title: "Agents write only inside the target repo",
     statement:
-      "Agents open sessions inside the repo being changed; sibling and product repos are read-only unless the task is for that repo, and an agent never writes, commits, installs, builds, or runs scripts outside the repo being changed. Consult the naming ledger before any rename and never apply a rename without a ledger entry. Branch per task; never push and never touch main. Use the gitignored .agent/ directory for local scratch. Verify against code, not roadmaps or README claims.",
+      "Agents open sessions inside the repo being changed; sibling and product repos are read-only unless the task is for that repo, and an agent never writes, commits, installs, builds, or runs scripts outside the repo being changed. Consult the naming ledger before any rename and never apply a rename without a ledger entry. Branch per task; never push and never touch main. Use the gitignored .agent/ directory for local scratch. Verify against code, not roadmaps or README claims. Agent-tool files are tracked deliberately: .commandcode/taste/** stays tracked (reviewed, shared preferences) while everything else under .commandcode/ is machine-specific and ignored, via the pattern pair .commandcode/* plus !.commandcode/taste/ and !.commandcode/taste/**.",
     status: "active",
     sourcePath: "content/standards/agent-protocol.md",
     sourceCommitSha: ARCH_REPO_COMMIT,
