@@ -112,6 +112,7 @@ pnpm seed:governance
 |---------|-------------|
 | `pnpm install` | Install all dependencies (runs `prisma generate` via postinstall) |
 | `pnpm prisma:push` | Push schema to local Postgres (`intel` DB) |
+| `pnpm prisma:migrate` | Apply migrations to a database (`prisma migrate deploy`) |
 | `pnpm prisma:generate` | Regenerate Prisma client from schema |
 | `pnpm typecheck` | Type-check root (project references) |
 | `pnpm -r typecheck` | Type-check every package |

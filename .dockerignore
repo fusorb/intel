@@ -1,0 +1,13 @@
+node_modules
+**/node_modules
+**/dist
+.agent
+.git
+.gitignore
+*.log
+.env
+.env.*
+coverage
+scratchpad
+test-output.txt
+pnpm-debug.log

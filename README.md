@@ -366,6 +366,13 @@ server refuses to start in token mode without a token.
 
 Configuration lives in `.env.example` (`INTEL_API_*`).
 
+### Deployment
+
+- **Container:** `Dockerfile` builds `apps/api` and runs it on Node 22 as a non-root user; `GET /health` is the container healthcheck.
+- **Bundle:** `apps/api` bundles the workspace packages into `dist/` (they export TypeScript source, which Node cannot load directly); Prisma and `pg` stay external.
+- **Migrations:** dev uses `pnpm prisma:push`; production uses `pnpm prisma:migrate` (`prisma migrate deploy`) against the committed baseline in `schemas/migrations/`.
+- **Host:** provide a private/managed Postgres, inject `DATABASE_URL` and `INTEL_API_*` from the platform's secret store, and terminate TLS at the edge. The API binds `0.0.0.0:$PORT` behind the platform proxy.
+
 ---
 
 ## Development workflow
