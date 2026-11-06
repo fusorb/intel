@@ -36,10 +36,9 @@ function parseArgs(argv) {
     console.error("sync-fusorb: use --from <path> to sync, or --check to verify");
     process.exit(1);
   }
-  if (opts.profile !== "names" && opts.profile !== "full") {
-    console.error("sync-fusorb: --profile must be names|full");
-    process.exit(1);
-  }
+  // Profile names are defined by profiles.json (sync()/check() report unknown
+  // names). Consumers may extend the list — this copy adds "intel", which
+  // vendors decisions/*.md + content/standards/* alongside the ecosystem facts.
   return opts;
 }
 

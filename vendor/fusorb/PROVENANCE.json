@@ -1,6 +1,6 @@
 {
   "sourceCommit": "634cef0261e8e6385de00f36d23fcc7c6c0bf027",
-  "syncedAt": "2026-11-05T07:13:11.653Z",
+  "syncedAt": "2026-11-06T07:59:42.661Z",
   "files": [
     {
       "path": "ecosystem.json",
@@ -33,6 +33,66 @@
     {
       "path": "tools/lib/links.mjs",
       "sha256": "ba989c83349dc89960d4ee8163b8e890798b5347178abb715949f6bebc45db08"
+    },
+    {
+      "path": "decisions/0001-role-and-boundary.md",
+      "sha256": "31642edb91d0bc36d53f4b0340632edc6f7a93d92f0d6247145c5a04adaf33c1"
+    },
+    {
+      "path": "decisions/0002-ecosystem-json-canonical.md",
+      "sha256": "70164f5a0b0daa1ab875b4c8ee51d63596c7977cac58c5459373440659bbf88c"
+    },
+    {
+      "path": "decisions/0003-naming-ledger.md",
+      "sha256": "5393b71555032bb7bf3e38e6d94a86291443fcfb08f6bcf7eed39531a4248351"
+    },
+    {
+      "path": "decisions/0004-content-format.md",
+      "sha256": "3437050795b95cd46a29f89564eb3a287f846eb9d66d29c273078c501769fbf0"
+    },
+    {
+      "path": "decisions/0005-ui-invariant.md",
+      "sha256": "977303afe8fbcbdc1dc06b6e0b4679bffdc38da5a25a7873a55578e5fbff02b8"
+    },
+    {
+      "path": "decisions/0006-hosting-and-domain-model.md",
+      "sha256": "b15ec57552098f439cc8bbb07f55018a7e57271a46c0672e47ecf71f2e454a5c"
+    },
+    {
+      "path": "decisions/0007-identity-authority.md",
+      "sha256": "d8f6b98d5108f0b17758d610c96cb68ce27b9666634f3d9b27b3df248d6e1f45"
+    },
+    {
+      "path": "decisions/0008-consumer-sync.md",
+      "sha256": "380cf5004d028298bbcedbddc10e9b5f209ee0f25c06139ef0039c3336084724"
+    },
+    {
+      "path": "standards/agent-protocol.md",
+      "sha256": "5656dc09014240f2ddc4f49452bdadc26a8379d175c8edf1d9706465fc62025e"
+    },
+    {
+      "path": "standards/domains-and-deploy.md",
+      "sha256": "301dd1fe3b164fb9a384780155c7afa0744a80e6326838140875c5eb6a9f92ab"
+    },
+    {
+      "path": "standards/facts-and-sources.md",
+      "sha256": "f5b60528ec67cb41ee2b02a097611deb67bc6dfbd292d3331211d3f43e19c372"
+    },
+    {
+      "path": "standards/naming.md",
+      "sha256": "3528826634a54498d5c831ce7516235839f32b09a72ed3abd631604b1f1f18e6"
+    },
+    {
+      "path": "standards/repo-structure.md",
+      "sha256": "c48aeb8d8e0912acb8293d22814af0311cd29d90acb5cc650694e73147727415"
+    },
+    {
+      "path": "standards/ui-invariant.md",
+      "sha256": "2f1b08deabe24598711f9f80fcf5da3b2ace260e7b1a26eb3eaffb3d90dce913"
+    },
+    {
+      "path": "standards/versioning-and-releases.md",
+      "sha256": "1552018d7f482f529531b80a2d7dba75650cd5b435353b5725b116cb2fe4ad52"
     }
   ]
 }

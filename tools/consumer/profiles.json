@@ -21,6 +21,34 @@
         { "src": "scripts/lib/derived-facts.mjs", "dst": "tools/lib/derived-facts.mjs" },
         { "src": "scripts/lib/links.mjs", "dst": "tools/lib/links.mjs" }
       ]
+    },
+    "intel": {
+      "description": "Ecosystem facts, ADRs, and standards consumed by Intel (cross-repo measurement)",
+      "files": [
+        { "src": "ecosystem/ecosystem.json", "dst": "ecosystem.json" },
+        { "src": "ecosystem/naming-ledger.json", "dst": "naming-ledger.json" },
+        { "src": "scripts/check-legacy-names.mjs", "dst": "tools/check-legacy-names.mjs" },
+        { "src": "scripts/lib/fs-walk.mjs", "dst": "tools/lib/fs-walk.mjs" },
+        { "src": "scripts/lib/glob.mjs", "dst": "tools/lib/glob.mjs" },
+        { "src": "scripts/lib/frontmatter.mjs", "dst": "tools/lib/frontmatter.mjs" },
+        { "src": "scripts/lib/derived-facts.mjs", "dst": "tools/lib/derived-facts.mjs" },
+        { "src": "scripts/lib/links.mjs", "dst": "tools/lib/links.mjs" },
+        { "src": "decisions/0001-role-and-boundary.md", "dst": "decisions/0001-role-and-boundary.md" },
+        { "src": "decisions/0002-ecosystem-json-canonical.md", "dst": "decisions/0002-ecosystem-json-canonical.md" },
+        { "src": "decisions/0003-naming-ledger.md", "dst": "decisions/0003-naming-ledger.md" },
+        { "src": "decisions/0004-content-format.md", "dst": "decisions/0004-content-format.md" },
+        { "src": "decisions/0005-ui-invariant.md", "dst": "decisions/0005-ui-invariant.md" },
+        { "src": "decisions/0006-hosting-and-domain-model.md", "dst": "decisions/0006-hosting-and-domain-model.md" },
+        { "src": "decisions/0007-identity-authority.md", "dst": "decisions/0007-identity-authority.md" },
+        { "src": "decisions/0008-consumer-sync.md", "dst": "decisions/0008-consumer-sync.md" },
+        { "src": "content/standards/agent-protocol.md", "dst": "standards/agent-protocol.md" },
+        { "src": "content/standards/domains-and-deploy.md", "dst": "standards/domains-and-deploy.md" },
+        { "src": "content/standards/facts-and-sources.md", "dst": "standards/facts-and-sources.md" },
+        { "src": "content/standards/naming.md", "dst": "standards/naming.md" },
+        { "src": "content/standards/repo-structure.md", "dst": "standards/repo-structure.md" },
+        { "src": "content/standards/ui-invariant.md", "dst": "standards/ui-invariant.md" },
+        { "src": "content/standards/versioning-and-releases.md", "dst": "standards/versioning-and-releases.md" }
+      ]
     }
   }
 }
