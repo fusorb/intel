@@ -1,13 +1,31 @@
 /**
- * The authored Decisions seeded into the graph by `runGovernance()`.
+ * The Decisions seeded into the graph by `runGovernance()`.
  *
- * These are NOT ingested from repo files — they are the ecosystem's architectural
- * invariants, transcribed from the Fusorb architecture repo
- * (`poetic-dev/fusorb@634cef02`): `ecosystem/ecosystem.json`, the naming ledger,
- * the ADRs in `decisions/*.md`, and `content/standards/*`. This file is the
- * committed source of truth; edit it and re-run `pnpm seed:governance` to
- * converge the graph.
+ * Two sources:
+ *
+ *  1. ADR-derived seeds — parsed at load time from the vendored architecture-repo
+ *     ADRs under `vendor/fusorb/decisions/*.md` (see `adr.ts`). For every decision
+ *     an ADR covers, the ADR's `## Decision` section is the canonical statement, so
+ *     it is read from the vendored file rather than transcribed by hand here.
+ *  2. Standard-backed hand-authored seeds — the decisions no vendored ADR covers:
+ *     `retired-npm-scope` (ecosystem.json), `repo-structure-baseline`
+ *     (standards/repo-structure.md), and `agent-protocol`
+ *     (standards/agent-protocol.md).
+ *
+ * The three former hand-authored seeds that ADRs now cover are RETIRED:
+ *   - `ui-invariant-facet`  -> ADR `0005-ui-invariant`
+ *   - `naming-ledger`       -> ADR `0003-naming-ledger`
+ *   - `identity-authority`  -> ADR `0007-identity-authority`
+ * Seeding is upsert-by-key and never deletes, so removing a key here does not
+ * remove its row: the old rows (and their GOVERNS edges) linger until removed out
+ * of band. We deliberately do not hand-delete them.
+ *
+ * The vendored tree is pinned at `poetic-dev/fusorb@634cef02`
+ * (`vendor/fusorb/PROVENANCE.json`). Edit the ADRs upstream and re-sync, or edit
+ * the standard-backed seeds below; then run `pnpm seed:governance` to converge.
  */
+
+import { loadAdrDecisions } from "./adr.js"
 
 export interface DecisionTarget {
   type: "REPOSITORY" | "PACKAGE"
@@ -29,31 +47,13 @@ export interface DecisionSeed {
   governs: DecisionTarget[]
 }
 
+/** Short sha of the vendored architecture-repo commit (see vendor/fusorb/PROVENANCE.json). */
 const ARCH_REPO_COMMIT = "634cef02"
 
 const repo = (repository: string): DecisionTarget => ({ type: "REPOSITORY", repository })
 
-export const ECOSYSTEM_DECISIONS: DecisionSeed[] = [
-  {
-    key: "ui-invariant-facet",
-    title: "Facet is the single mandatory UI system",
-    statement:
-      "Facet is the single mandatory UI system: no Fusorb repo builds an independent UI, and any future web surface consumes @fusorb/facet-*. A product that cannot use Facet must hold an explicit waiver naming the product, the reason Facet cannot be used today, the migration plan, and the owner who holds it; a waiver is a deviation, not a resolution, and closes when the product migrates. The Facet web packages (@fusorb/facet-components/-auth/-layout) are DOM/Radix/Tailwind and do not run in React Native, so native surfaces such as SovPort consume only @fusorb/facet-sdk (and facet-store).",
-    status: "active",
-    sourcePath: "content/standards/ui-invariant.md",
-    sourceCommitSha: ARCH_REPO_COMMIT,
-    governs: [repo("sovgrant"), repo("relnex")],
-  },
-  {
-    key: "naming-ledger",
-    title: "Canonical names come from the ecosystem naming ledger",
-    statement:
-      "Names are not left to drift: ecosystem/naming-ledger.json is the single source of truth and the gate `pnpm check:names` enforces it. Legacy names are history-only — ArcUI→Facet, ArcID→SovGrant, ArcBase→Relnex, ArcWallet→SovPort, @arcevo/→@fusorb/, ArcIdClient→SgClient, ArcProvider→SgProvider, arcid_* storage keys→sg_*. The live public brand and domain (ArcevoCirqle, arcevocirqle.com.ng, and email addresses on that domain) must never be renamed.",
-    status: "active",
-    sourcePath: "content/standards/naming.md",
-    sourceCommitSha: ARCH_REPO_COMMIT,
-    governs: [repo("facet"), repo("sovgrant"), repo("relnex"), repo("sovport")],
-  },
+/** Standard-backed decisions that no vendored ADR covers. */
+const STANDARD_DECISIONS: DecisionSeed[] = [
   {
     key: "retired-npm-scope",
     title: "The @arcevo npm scope is retired; packages use @fusorb/*",
@@ -63,16 +63,6 @@ export const ECOSYSTEM_DECISIONS: DecisionSeed[] = [
     sourcePath: "ecosystem/ecosystem.json",
     sourceCommitSha: ARCH_REPO_COMMIT,
     governs: [repo("facet"), repo("sovgrant"), repo("relnex"), repo("sovport")],
-  },
-  {
-    key: "identity-authority",
-    title: "SovGrant is the canonical identity and access layer",
-    statement:
-      "SovGrant is the single Identity Provider (IdP) for the ecosystem. Every consumer — first-party and third-party relying parties — delegates authentication to SovGrant and never owns credentials; the integration contract is OIDC, and new relying parties integrate as OIDC clients using authorization code with PKCE. SovGrant owns identity, credentials (password/WebAuthn/passkeys/MFA), sessions and tokens, federation, consent, lifecycle, and org/tenant membership, roles, and scopes. Relying parties key local data by a reference to the canonical identity (identityId), must not mirror identity attributes as authority, and verify tokens locally via JWKS (shared-secret verification is a temporary, first-party-only shortcut to retire). The canonical identity reference is the SovGrant Identity.id; the JWT sub claim is that Identity.id.",
-    status: "active",
-    sourcePath: "decisions/0007-identity-authority.md",
-    sourceCommitSha: ARCH_REPO_COMMIT,
-    governs: [repo("sovgrant"), repo("relnex"), repo("sovport")],
   },
   {
     key: "repo-structure-baseline",
@@ -94,4 +84,10 @@ export const ECOSYSTEM_DECISIONS: DecisionSeed[] = [
     sourceCommitSha: ARCH_REPO_COMMIT,
     governs: [repo("facet"), repo("sovgrant"), repo("relnex"), repo("sovport")],
   },
+]
+
+/** ADR-derived seeds first (sorted by ADR filename), then the standard-backed seeds. */
+export const ECOSYSTEM_DECISIONS: DecisionSeed[] = [
+  ...loadAdrDecisions(),
+  ...STANDARD_DECISIONS,
 ]

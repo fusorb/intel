@@ -39,6 +39,89 @@ describe("runGovernance", () => {
     }
   })
 
+  it("prunes decisions no longer in the seed, removing their edges", async () => {
+    if (!hasDb) return
+
+    await runGovernance()
+
+    const target = await prisma.repository.findFirst({
+      where: { removedAt: null },
+      select: { id: true },
+    })
+    const staleKey = "test-retired-decision"
+    const stale = await prisma.decision.upsert({
+      where: { key: staleKey },
+      create: { key: staleKey, title: "Retired", statement: "retired", status: "active" },
+      update: { status: "active" },
+    })
+
+    if (target) {
+      // One edge with the stale decision as source and one as target, covering
+      // both prune directions.
+      await prisma.relationship.upsert({
+        where: {
+          fromEntityId_toEntityId_fromEntityType_toEntityType_kind: {
+            fromEntityId: stale.id,
+            toEntityId: target.id,
+            fromEntityType: "DECISION",
+            toEntityType: "REPOSITORY",
+            kind: "GOVERNS",
+          },
+        },
+        create: {
+          fromEntityId: stale.id,
+          toEntityId: target.id,
+          fromEntityType: "DECISION",
+          toEntityType: "REPOSITORY",
+          kind: "GOVERNS",
+          sourcePath: "test",
+        },
+        update: { removedAt: null },
+      })
+      await prisma.relationship.upsert({
+        where: {
+          fromEntityId_toEntityId_fromEntityType_toEntityType_kind: {
+            fromEntityId: target.id,
+            toEntityId: stale.id,
+            fromEntityType: "REPOSITORY",
+            toEntityType: "DECISION",
+            kind: "VIOLATES",
+          },
+        },
+        create: {
+          fromEntityId: target.id,
+          toEntityId: stale.id,
+          fromEntityType: "REPOSITORY",
+          toEntityType: "DECISION",
+          kind: "VIOLATES",
+          sourcePath: "test",
+        },
+        update: { removedAt: null },
+      })
+    }
+
+    await runGovernance()
+
+    expect(await prisma.decision.findUnique({ where: { key: staleKey } })).toBeNull()
+    const staleEdges = await prisma.relationship.count({
+      where: { OR: [{ fromEntityId: stale.id }, { toEntityId: stale.id }] },
+    })
+    expect(staleEdges).toBe(0)
+
+    // Seeded decisions and their GOVERNS edges survive the prune.
+    const seededKeys = ECOSYSTEM_DECISIONS.map((d) => d.key)
+    const remaining = await prisma.decision.findMany({ where: { key: { in: seededKeys } } })
+    expect(remaining.length).toBe(seededKeys.length)
+    const seededGoverns = await prisma.relationship.count({
+      where: {
+        kind: "GOVERNS",
+        removedAt: null,
+        fromEntityId: { in: remaining.map((d) => d.id) },
+      },
+    })
+    expect(seededGoverns).toBeGreaterThan(0)
+  })
+
   it("points every VIOLATES edge at a seeded decision", async () => {
     if (!hasDb) return
 

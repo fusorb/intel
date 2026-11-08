@@ -29,6 +29,19 @@ export type { GovernanceSummary } from "./governance.js"
 export { ECOSYSTEM_DECISIONS } from "./decisions.js"
 export type { DecisionSeed, DecisionTarget } from "./decisions.js"
 export {
+  loadAdrDecisions,
+  parseFrontmatter,
+  extractTitle,
+  extractSection,
+  mapStatus,
+  loadEcosystemIds,
+  toGoverns,
+  loadSourceCommitSha,
+  defaultVendorDir,
+  UI_INVARIANT_SOURCE_PATH,
+} from "./adr.js"
+export type { Frontmatter, FrontmatterValue, ParsedAdr } from "./adr.js"
+export {
   parseTypeScriptFile,
   parseFile,
   linkSymbols,

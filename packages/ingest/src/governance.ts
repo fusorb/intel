@@ -1,5 +1,6 @@
 import { prisma } from "@fusorb/intel-graph"
-import { ECOSYSTEM_DECISIONS, type DecisionTarget } from "./decisions.js"
+import { ECOSYSTEM_DECISIONS, type DecisionTarget, type DecisionSeed } from "./decisions.js"
+import { UI_INVARIANT_SOURCE_PATH } from "./adr.js"
 import { upsertDecision, linkGoverns, linkViolates } from "./graph.js"
 
 export interface GovernanceSummary {
@@ -42,10 +43,30 @@ function isShadcnStyle(name: string): boolean {
   )
 }
 
-/** Repositories the UI invariant governs, derived from the seed (not hardcoded). */
+/**
+ * The canonical UI system itself (ecosystem product "facet"). It IS the mandatory
+ * UI system, not a consumer bound to use it, so the UI-invariant detector must not
+ * flag Facet's own Radix/Tailwind packages as violations.
+ */
+const UI_SYSTEM_REPO = "facet"
+
+/**
+ * The ADR-derived UI-invariant seed, located by its vendored sourcePath (not by a
+ * hardcoded key). The hand-authored `ui-invariant-facet` key it replaced is
+ * retired, so the detector must follow the ADR seed's key.
+ */
+function uiInvariantSeed(): DecisionSeed | undefined {
+  return ECOSYSTEM_DECISIONS.find((d) => d.sourcePath === UI_INVARIANT_SOURCE_PATH)
+}
+
+/**
+ * Repositories the UI invariant governs — derived from the ADR seed (not
+ * hardcoded), minus the UI system itself, which is not a consumer of the rule.
+ */
 function uiGovernedRepos(): Set<string> {
-  const seed = ECOSYSTEM_DECISIONS.find((d) => d.key === "ui-invariant-facet")
-  return new Set((seed?.governs ?? []).map((g) => g.repository))
+  const repos = new Set((uiInvariantSeed()?.governs ?? []).map((g) => g.repository))
+  repos.delete(UI_SYSTEM_REPO)
+  return repos
 }
 
 async function resolveTarget(
@@ -89,6 +110,8 @@ export async function detectViolations(decisionIds: Map<string, string>): Promis
 
   let count = 0
   const uiRepos = uiGovernedRepos()
+  const uiSeed = uiInvariantSeed()
+  const uiDecisionId = uiSeed ? decisionIds.get(uiSeed.key) : undefined
 
   // Detectors A (retired @arcevo scope) and B (UI invariant) read package manifests.
   const packages = await prisma.package.findMany({
@@ -124,14 +147,13 @@ export async function detectViolations(decisionIds: Map<string, string>): Promis
       }
     }
 
-    const uiDecision = decisionIds.get("ui-invariant-facet")
-    if (uiDecision && uiRepos.has(p.repository.name)) {
+    if (uiDecisionId && uiRepos.has(p.repository.name)) {
       const shadcn = names.filter(isShadcnStyle)
       if (shadcn.length > 0) {
         await linkViolates(
           p.id,
           "PACKAGE",
-          uiDecision,
+          uiDecisionId,
           `UI dependencies bypass Facet: ${shadcn.join(", ")}`,
           p.sourcePath,
           p.sourceCommitSha,
@@ -180,7 +202,8 @@ export async function detectViolations(decisionIds: Map<string, string>): Promis
 /**
  * Seed the authored ecosystem Decisions, write their GOVERNS edges (clearing
  * stale ones), then detect and refresh VIOLATES edges. Idempotent: re-running
- * converges without duplicating rows or edges.
+ * converges without duplicating rows or edges, and prunes any Decision whose key
+ * is no longer in the seed so the stored set equals `ECOSYSTEM_DECISIONS`.
  */
 export async function runGovernance(): Promise<GovernanceSummary> {
   const decisionIds = new Map<string, string>()
@@ -194,6 +217,24 @@ export async function runGovernance(): Promise<GovernanceSummary> {
       sourceCommitSha: seed.sourceCommitSha,
     })
     decisionIds.set(seed.key, id)
+  }
+
+  // Converge: drop Decisions no longer in the seed (keys seeded by earlier runs
+  // and since retired). Relationship links entities by id with no FK cascade, so
+  // remove each stale decision's edges in both directions before deleting its row.
+  const seedKeys = ECOSYSTEM_DECISIONS.map((d) => d.key)
+  const stale = await prisma.decision.findMany({
+    where: { key: { notIn: seedKeys } },
+    select: { id: true, key: true },
+    orderBy: { key: "asc" },
+  })
+  if (stale.length > 0) {
+    const staleIds = stale.map((d) => d.id)
+    await prisma.relationship.deleteMany({
+      where: { OR: [{ fromEntityId: { in: staleIds } }, { toEntityId: { in: staleIds } }] },
+    })
+    await prisma.decision.deleteMany({ where: { id: { in: staleIds } } })
+    console.log(`[governance] pruned stale decisions: ${stale.map((d) => d.key).join(", ")}`)
   }
 
   // Clear stale GOVERNS edges from the seeded decisions, then re-assert from seed.

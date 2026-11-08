@@ -106,7 +106,9 @@ describe("Acceptance Suite", () => {
     expect(Array.isArray(decisions)).toBe(true)
     expect(decisions.length).toBeGreaterThanOrEqual(1)
     const titles = decisions.map((d) => d.name)
-    expect(titles).toContain("Facet is the single mandatory UI system")
+    // Title now derives from the vendored ADR (decisions/0005-ui-invariant.md)
+    // rather than the retired hand-authored `ui-invariant-facet` seed.
+    expect(titles).toContain("UI invariant and waiver process")
   })
 
   // 6. Which entities violate active decisions?
