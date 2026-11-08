@@ -56,7 +56,7 @@ join table:
 | **Module** | A source directory containing `.ts`/`.tsx`/`.js`/`.jsx` files | `packages/components/src`, `src/domains/auth` |
 | **Symbol** | A named declaration in source (extracted from `.ts`/`.tsx` via the TypeScript compiler API) | `useAuth`, `handleApiRoute` |
 | **Document** | A Markdown/MDX file | `README.md`, `docs/architecture.md` |
-| **Decision** | A recorded rule, invariant, or architectural decision (written by humans or agents, not ingested; seeded via `pnpm seed:governance`) | "Facet is the single mandatory UI system across the ecosystem" |
+| **Decision** | A recorded rule, invariant, or architectural decision (derived from the architecture repo's vendored ADRs plus a small standard-backed seed; not ingested; seeded via `pnpm seed:governance`) | "Facet is the single mandatory UI system across the ecosystem" |
 
 **Relationships** link entities with typed edges:
 
@@ -279,19 +279,25 @@ This throwaway script (`scripts/verify.ts`) asserts three facts from real data:
 2. Facet ships Package entities for `packages/motion`, `packages/native`, and `packages/sandbox`.
 3. Relnex depends on `@fusorb/facet-components` (the shadcn stack is retired).
 
-### Author decisions and governance
+### Seed decisions and governance
 
-Architectural decisions are **authored, not ingested**. They live as committed seed data in
-`packages/ingest/src/decisions.ts` (the six ecosystem invariants from the architecture repo:
-the UI invariant, the naming ledger, the retired `@arcevo` scope, SovGrant's identity
-authority, the repo-structure baseline, and the agent protocol). Write them to the graph with:
+Architectural decisions are **not ingested from the product repos**. Most are derived from the
+architecture repo's own ADRs, vendored under `vendor/fusorb/decisions/*.md` (8 ADRs, `0001`–`0008`)
+and parsed by `packages/ingest/src/adr.ts`: the ADR filename slug is the stable `key`, the H1
+(leading `N. ` ordinal stripped) the title, the verbatim `## Decision` section the statement,
+and the frontmatter supplies `status`/`governs` (`governs` ids filtered to those present in
+`vendor/fusorb/ecosystem.json`) with `sourceCommitSha` from `vendor/fusorb/PROVENANCE.json`. A
+small hand-authored remainder in `packages/ingest/src/decisions.ts` (`STANDARD_DECISIONS`) covers
+the standards no ADR exists for: the retired `@arcevo` npm scope, the repo-structure baseline,
+and the agent protocol. Write them to the graph with:
 
 ```bash
 pnpm seed:governance
 ```
 
-This upserts each `Decision` by its stable `key` with provenance, writes a `GOVERNS` edge to
-every Repository/Package/Module it governs, then scans the graph for violations — retired
+This upserts each `Decision` by its stable `key` with provenance, prunes any Decision no longer
+in the seed (deleting its relationships first), writes a `GOVERNS` edge to every
+Repository/Package/Module it governs, then scans the graph for violations — retired
 `@arcevo/*` dependencies, shadcn-style UI deps that bypass Facet, and repos missing
 `AGENTS.md`/`CLAUDE.md` — and writes `VIOLATES` edges. Re-running is idempotent and clears
 violations that no longer hold, so the graph converges to the current commit.

@@ -150,9 +150,12 @@ function completeIngestionRun(runId: string, status: "success" | "failed",
 
 ### Decisions / governance
 
-`Decision` rows are authored (never ingested). `runGovernance()` upserts them by stable
-`key`, writes `GOVERNS` edges, and detects `VIOLATES` edges (retired `@arcevo/*` scope,
-shadcn-style UI deps, missing `AGENTS.md`/`CLAUDE.md`). Idempotent.
+`Decision` rows are never ingested from the product repos: they are derived from the architecture
+repo's vendored ADRs (`vendor/fusorb/decisions/*.md`, parsed by `adr.ts`) plus a small
+hand-authored standard-backed remainder. `runGovernance()` upserts them by stable `key`, prunes
+any Decision no longer in the seed (deleting its relationships first), writes `GOVERNS` edges, and
+detects `VIOLATES` edges (retired `@arcevo/*` scope, shadcn-style UI deps, missing
+`AGENTS.md`/`CLAUDE.md`). Idempotent.
 
 ```ts
 interface DecisionUpsertInput {
@@ -171,7 +174,7 @@ interface GovernanceSummary { decisions: number; governsEdges: number; violation
 function runGovernance(): Promise<GovernanceSummary>
 function detectViolations(decisionIds: Map<string, string>): Promise<number>
 
-// Authored seed data (ecosystem invariants) + its types
+// Decision seeds: ADR-derived (vendor/fusorb/decisions/*.md) + standard-backed remainder
 const ECOSYSTEM_DECISIONS: DecisionSeed[]
 interface DecisionSeed {
   key: string; title: string; statement: string; status: string

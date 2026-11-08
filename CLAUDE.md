@@ -16,8 +16,10 @@ This repo is **Tier-1 infra**. It is not a product that ships to end users.
   `REFERENCES`, `GOVERNS`, and `VIOLATES` edge kinds. `DependencyType` enum (`PRODUCTION`,
   `DEVELOPMENT`) for dependency edges. `IngestionRun` model tracks per-repo ingestion
   counts and status. Provenance on every row. `Decision` entities hold architectural
-  rules/invariants and are written by humans/agents (not ingested), with `sourceType`
-  almost always `human_statement`.
+  rules/invariants and are derived from the architecture repo's vendored ADRs
+  (`vendor/fusorb/decisions/*.md`, parsed by `adr.ts`) plus a small hand-authored
+  standard-backed remainder — not ingested from the product repos — with `sourceType`
+  `human_statement`.
 - **Evidence**: `packages/evidence` — the `EvidenceLevel` enum (verified / strongly_supported /
   inferred / unknown) + helpers for attaching provenance.
 - **Ingest**: `packages/ingest` — clones a repo via git, walks the file tree, extracts entities
@@ -34,10 +36,11 @@ This repo is **Tier-1 infra**. It is not a product that ships to end users.
 - **API**: `apps/api` — thin, read-only HTTP service (Hono) over the graph, the surface for
   the internal tool at `intel.fusorb.com`. Single-user bearer-token auth by default;
   routes: `/health`, `/ask`, `/ask/agent`, `/search`, `/symbols*`, `/decisions`, `/violations`.
-- **Governance**: `packages/ingest` also holds the authored `Decision` seed
-  (`decisions.ts`) and the governance engine (`governance.ts`) — `runGovernance()` upserts
-  decisions by stable `key`, writes `GOVERNS` edges, and detects `VIOLATES` edges. Run it
-  with `pnpm seed:governance`.
+- **Governance**: `packages/ingest` also holds the `Decision` seed — `adr.ts` parses the
+  vendored ADRs (`vendor/fusorb/decisions/*.md`), with a small standard-backed remainder in
+  `decisions.ts` — plus the governance engine (`governance.ts`): `runGovernance()` upserts
+  decisions by stable `key`, prunes any no longer in the seed, writes `GOVERNS` edges, and
+  detects `VIOLATES` edges. Run it with `pnpm seed:governance`.
 - **CI**: `.github/workflows/ci.yml` (typecheck/build/unit tests, no DB) and
   `.github/workflows/sync.yml` (nightly ingest + seed + verify against a throwaway Postgres).
 
@@ -66,7 +69,7 @@ pnpm ingest:all
 # 5. Verify the three acceptance facts
 pnpm verify
 
-# 6. Seed the authored decisions + governance edges
+# 6. Seed the ADR-derived decisions + governance edges
 pnpm seed:governance
 ```
 
@@ -123,4 +126,4 @@ pnpm seed:governance
 | `pnpm ask "<question>" [--agent]` | Ask a question — single-shot, or the multi-step agent |
 | `pnpm --filter @fusorb/intel-api dev` | Run the internal read-only API (`apps/api`) |
 | `pnpm verify` | Run the throwaway verification script (3 acceptance facts) |
-| `pnpm seed:governance` | Seed authored decisions and (re)compute GOVERNS/VIOLATES edges |
+| `pnpm seed:governance` | Seed ADR-derived decisions and (re)compute GOVERNS/VIOLATES edges |

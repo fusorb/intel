@@ -9,12 +9,15 @@ plus a polymorphic Relationship join table. Every row carries full provenance
 
 The `Decision` entity captures architectural rules and invariants (e.g. "Facet is the single
 mandatory UI system across the ecosystem"). Unlike the other five, `Decision` rows are **not**
-extracted by ingestion — they are authored as committed seed data in
-`packages/ingest/src/decisions.ts` and written to the graph by `runGovernance()`
-(`pnpm seed:governance`). Their `sourceType` is `human_statement`, since they originate from
-the ecosystem's standards rather than from an ingested file. Relationship kinds `GOVERNS` and
-`VIOLATES` link Decisions to the entities they govern: `GOVERNS` edges are seeded alongside the
-decisions, and `VIOLATES` edges are detected from the live graph.
+extracted from the product repos — they are derived from the architecture repo's own ADRs,
+vendored under `vendor/fusorb/decisions/*.md` (8 ADRs, `0001`–`0008`) and parsed by
+`packages/ingest/src/adr.ts`, plus a small hand-authored remainder in
+`packages/ingest/src/decisions.ts` (`STANDARD_DECISIONS`) for standards no ADR covers. They are
+written to the graph by `runGovernance()` (`pnpm seed:governance`). Their `sourceType` is
+`human_statement`, since they originate from the ecosystem's authored decisions rather than from
+an ingested product-repo file. Relationship kinds `GOVERNS` and `VIOLATES` link Decisions to the
+entities they govern: `GOVERNS` edges are seeded alongside the decisions, and `VIOLATES` edges
+are detected from the live graph.
 
 ## Tech stack
 
@@ -38,8 +41,9 @@ fusorb/intel
 │   ├── graph/                 # Prisma client singleton + re-exports
 │   ├── ingest/                # Repo cloning, file-tree walking, entity extraction, CLI
 │   │   └── src/
+│   │       ├── adr.ts         # Parses vendored architecture-repo ADRs (vendor/fusorb/decisions) into Decision seeds
 │   │       ├── cli.ts
-│   │       ├── decisions.ts   # Authored Decision seed data (ecosystem invariants)
+│   │       ├── decisions.ts   # Decision seeds: ADR-derived + standard-backed remainder
 │   │       ├── extract.ts
 │   │       ├── governance.ts  # runGovernance(): seed decisions, write GOVERNS/VIOLATES
 │   │       ├── graph.ts
@@ -123,14 +127,22 @@ Repos are cloned to `.agent/repos/<name>/` (gitignored). Re-running fetches + re
 
 ### Seed decisions and governance
 
-Decisions are authored, not ingested. Edit the committed seed
-(`packages/ingest/src/decisions.ts`) then run:
+Decisions are not extracted from the product repos. Most are derived from the architecture
+repo's own ADRs, vendored under `vendor/fusorb/decisions/*.md` and parsed by
+`packages/ingest/src/adr.ts`: the ADR filename slug becomes the stable `key`, the H1 (leading
+`N. ` ordinal stripped) the title, the verbatim `## Decision` section the statement, and the
+frontmatter supplies `status`/`governs` (`governs` ids are filtered to those present in
+`vendor/fusorb/ecosystem.json`), with `sourceCommitSha` from `vendor/fusorb/PROVENANCE.json`. The
+small hand-authored remainder in `packages/ingest/src/decisions.ts` (`STANDARD_DECISIONS`) covers
+the standards no ADR exists for. Edit the ADRs upstream and re-sync, or edit the standard-backed
+seeds, then run:
 
 ```bash
 pnpm seed:governance
 ```
 
-`runGovernance()` upserts each decision by its stable `key`, writes a `GOVERNS` edge to every
+`runGovernance()` upserts each decision by its stable `key`, **prunes** any Decision no longer in
+the seed (deleting its relationships first), writes a `GOVERNS` edge to every
 Repository/Package/Module it governs, then detects `VIOLATES` edges (retired `@arcevo/*` scope,
 shadcn-style UI deps, missing `AGENTS.md`/`CLAUDE.md`). It is idempotent and clears violations
 that no longer hold — re-run it after `pnpm ingest:all`.
