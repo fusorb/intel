@@ -298,9 +298,11 @@ export interface DecisionUpsertInput {
 }
 
 /**
- * Upsert a Decision by its stable `key`. Decisions are authored (never ingested),
- * so provenance is `verified` / `human_statement`. Decision has no `removedAt`;
- * lifecycle is carried by `status`.
+ * Upsert a Decision by its stable `key`. Decisions are authored ecosystem
+ * decisions, derived from the architecture repo's vendored ADRs rather than
+ * inferred from product-repo data, so provenance is `verified` /
+ * `human_statement`. Decision has no `removedAt`; lifecycle is carried by
+ * `status`.
  */
 export async function upsertDecision(input: DecisionUpsertInput): Promise<string> {
   const prov = provenance(input.sourcePath, input.sourceCommitSha, "verified", "human_statement")

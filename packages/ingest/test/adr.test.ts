@@ -128,27 +128,40 @@ describe("extractSection", () => {
 })
 
 describe("mapStatus", () => {
-  it("maps Accepted/Active and the arch repo's Proposed/Draft to active", () => {
-    // "Proposed" -> active is deliberate: every vendored ADR is "Proposed" and
-    // mapping it to "deferred" would hide all of them from getActiveDecisions().
-    for (const raw of ["Accepted", "Active", "Proposed", "Draft", "propOSed", "  active "]) {
+  it("maps accepted/active/approved to active", () => {
+    for (const raw of ["Accepted", "Active", "Approved", "  active ", "ACCEPTED"]) {
       expect(mapStatus(raw)).toBe("active")
     }
   })
 
-  it("maps Superseded and Rejected to superseded", () => {
+  it("maps proposed/draft/provisional/in review to proposed (faithful, not coerced)", () => {
+    for (const raw of [
+      "Proposed",
+      "Draft",
+      "Provisional",
+      "In review",
+      "in-review",
+      "propOSed",
+    ]) {
+      expect(mapStatus(raw)).toBe("proposed")
+    }
+  })
+
+  it("maps superseded/rejected/deprecated/retired to superseded", () => {
     for (const raw of ["Superseded", "Rejected", "Deprecated", "Retired"]) {
       expect(mapStatus(raw)).toBe("superseded")
     }
   })
 
-  it("maps Deferred to deferred", () => {
-    expect(mapStatus("Deferred")).toBe("deferred")
-    expect(mapStatus("on hold")).toBe("deferred")
+  it("maps deferred/on hold/paused to deferred", () => {
+    for (const raw of ["Deferred", "on hold", "on-hold", "Paused"]) {
+      expect(mapStatus(raw)).toBe("deferred")
+    }
   })
 
-  it("never silently hides an unknown status", () => {
-    expect(mapStatus("something-new")).toBe("active")
+  it("resolves an unknown status to proposed (never asserts a decision is in force)", () => {
+    expect(mapStatus("something-new")).toBe("proposed")
+    expect(mapStatus("")).toBe("proposed")
   })
 })
 
@@ -218,9 +231,9 @@ describe("loadAdrDecisions", () => {
     }
   })
 
-  it("maps every vendored ADR to an active status", () => {
+  it("maps every vendored ADR to proposed (all 8 ADRs are status: Proposed)", () => {
     for (const seed of seeds) {
-      expect(seed.status).toBe("active")
+      expect(seed.status).toBe("proposed")
     }
   })
 
@@ -280,9 +293,12 @@ describe("ECOSYSTEM_DECISIONS", () => {
     expect(keys.has("identity-authority")).toBe(false)
   })
 
-  it("marks every seeded decision active so none is hidden from active results", () => {
+  it("labels ADR-derived decisions proposed and the standard-backed ones active", () => {
+    const adrKeys = new Set(EXPECTED_ADR_KEYS)
     for (const seed of ECOSYSTEM_DECISIONS) {
-      expect(seed.status).toBe("active")
+      // Every vendored ADR is `status: Proposed` upstream -> proposed; the three
+      // standard-backed seeds are asserted in force -> active.
+      expect(seed.status).toBe(adrKeys.has(seed.key) ? "proposed" : "active")
     }
   })
 

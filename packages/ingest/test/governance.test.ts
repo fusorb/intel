@@ -25,7 +25,9 @@ describe("runGovernance", () => {
     const rows = await prisma.decision.findMany({ where: { key: { in: seededKeys } } })
     expect(rows.length).toBe(seededKeys.length)
     for (const row of rows) {
-      expect(row.status).toBe("active")
+      // Status is honest: ADR-derived rows are `proposed`, standard-backed rows
+      // `active` — a live seed is never `superseded`/`deferred`.
+      expect(["active", "proposed"]).toContain(row.status)
       expect(row.sourceType).toBe("human_statement")
     }
 

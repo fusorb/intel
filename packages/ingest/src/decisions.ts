@@ -39,7 +39,7 @@ export interface DecisionSeed {
   key: string
   title: string
   statement: string
-  status: "active" | "superseded" | "deferred"
+  status: "active" | "proposed" | "superseded" | "deferred"
   /** Path within the architecture repo the statement was read from. */
   sourcePath: string
   /** The architecture-repo commit the statement was read at. */

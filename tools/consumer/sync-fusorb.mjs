@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // sync-fusorb.mjs — shared consumer sync tool (vendor/fusorb/ snapshot)
 // Dependency-free, Windows-safe (node:path, \r?\n). Zero repo-specific constants except profile lists.
-// Reference: arcevocirqle/scripts/sync-fusorb.mjs (read-only). Differences: profiles (names|full), --profile, self-testable,
+// Reference: arcevocirqle/scripts/sync-fusorb.mjs (read-only). Differences: profile names come from profiles.json, --profile, self-testable,
 // provenance has no org names or local paths; tool itself is vendored so consumers can update it.
 
 import { createHash } from "node:crypto";
@@ -36,9 +36,6 @@ function parseArgs(argv) {
     console.error("sync-fusorb: use --from <path> to sync, or --check to verify");
     process.exit(1);
   }
-  // Profile names are defined by profiles.json (sync()/check() report unknown
-  // names). Consumers may extend the list — this copy adds "intel", which
-  // vendors decisions/*.md + content/standards/* alongside the ecosystem facts.
   return opts;
 }
 

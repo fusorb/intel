@@ -194,7 +194,7 @@ model Decision {
   key             String        @unique // stable slug for idempotent seeding, e.g. "ui-invariant-facet"
   title           String
   statement       String        // the rule itself, in plain language
-  status          String        @default("active") // active | superseded | deferred
+  status          String        @default("active") // active | proposed | superseded | deferred
 
   sourcePath      String?       // if it *was* written down somewhere (an ADR doc), point to it
   sourceType      SourceType    @default(human_statement)

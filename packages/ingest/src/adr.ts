@@ -154,12 +154,8 @@ export function extractSection(body: string, heading: string): string {
   return collected.join("\n").trim()
 }
 
-const ACTIVE_STATUSES = new Set([
-  "accepted",
-  "active",
-  "approved",
-  // See mapStatus() below: the arch repo labels every ADR "Proposed", and these
-  // are in force — mapping them to `deferred` would hide them from active results.
+const ACTIVE_STATUSES = new Set(["accepted", "active", "approved"])
+const PROPOSED_STATUSES = new Set([
   "proposed",
   "draft",
   "provisional",
@@ -170,26 +166,34 @@ const SUPERSEDED_STATUSES = new Set(["superseded", "rejected", "deprecated", "re
 const DEFERRED_STATUSES = new Set(["deferred", "on hold", "on-hold", "paused"])
 
 /**
- * Map an ADR frontmatter `status` to the Decision enum (`active` | `superseded` |
- * `deferred`).
+ * Map an ADR frontmatter `status` to the Decision status enum (`active` |
+ * `proposed` | `superseded` | `deferred`). The mapping is FAITHFUL — it records
+ * what the ADR says rather than asserting a decision is in force:
+ *
+ *   accepted / active / approved                          -> `active`
+ *   proposed / draft / provisional / in review / in-review -> `proposed`
+ *   superseded / rejected / deprecated / retired          -> `superseded`
+ *   deferred / on hold / on-hold / paused                 -> `deferred`
+ *   (anything else)                                       -> `proposed`
  *
  * The arch repo labels EVERY ADR `Proposed` — including load-bearing ones like
  * "SovGrant is the canonical IdP" — because `status` there tracks that repo's
- * document review lifecycle, not whether the decision is in force. Downstream,
- * `getActiveDecisions()` (packages/retrieval) filters `status: "active"`, and the
- * API `/decisions` route reads through it; `packages/ingest/test/governance.test.ts`
- * also asserts every seeded row is `active`. Mapping `Proposed` -> `deferred`
- * would therefore drop all eight ADRs from active results. So `Proposed`/`Draft`
- * map to `active`: a decision recorded as decided stays in force until superseded.
- * Unknown values also resolve to `active`, so an unrecognised status never
- * silently hides a decision.
+ * document-review lifecycle, not whether the decision is in force. `proposed`
+ * therefore means "recorded but not ratified". Visibility is a SEPARATE concern
+ * from `status`: the read path (`getActiveDecisions()` in packages/retrieval, and
+ * the API `/decisions` route that reads through it) surfaces every decision that
+ * is not retired — `status` in {`active`, `proposed`} — so a `proposed` decision
+ * stays visible while carrying its honest label. Unknown values also resolve to
+ * `proposed`, the conservative choice: an unrecognised status must never assert a
+ * decision is in force.
  */
 export function mapStatus(raw: string): DecisionSeed["status"] {
   const status = raw.trim().toLowerCase()
+  if (ACTIVE_STATUSES.has(status)) return "active"
+  if (PROPOSED_STATUSES.has(status)) return "proposed"
   if (SUPERSEDED_STATUSES.has(status)) return "superseded"
   if (DEFERRED_STATUSES.has(status)) return "deferred"
-  if (ACTIVE_STATUSES.has(status)) return "active"
-  return "active"
+  return "proposed"
 }
 
 /** The repo root, assumed to be the process working directory. */

@@ -1185,12 +1185,18 @@ export async function readDocumentContent(
 // --- Governance / Decision retrieval ---
 
 /**
- * Find all Decision entities with `status: "active"`.
- * Decisions are authored explicitly (never auto-derived from repo data).
+ * Find all Decision entities that are NOT retired — `status` in {`active`,
+ * `proposed`} — so recorded-but-unratified (`proposed`) decisions stay visible
+ * while carrying their honest status. Superseded and deferred decisions are
+ * excluded.
+ *
+ * Decisions are authored ecosystem decisions, derived from the architecture
+ * repo's vendored ADRs (plus a small standard-backed remainder) — never inferred
+ * from product-repo data.
  */
 export async function getActiveDecisions(): Promise<RetrievedEntity[]> {
   const decisions = await prisma.decision.findMany({
-    where: { status: "active" },
+    where: { status: { in: ["active", "proposed"] } },
   })
 
   return decisions.map((d) => ({
@@ -1508,7 +1514,7 @@ export async function retrieve(
     mergeResults(result, depResult)
   }
 
-  // 4. Include active decisions and any violations
+  // 4. Include non-retired decisions (active or proposed) and any violations
   const activeDecisions = await getActiveDecisions()
   for (const dec of activeDecisions) {
     result.entities.push(dec)
