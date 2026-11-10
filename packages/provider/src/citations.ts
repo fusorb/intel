@@ -37,13 +37,15 @@ export function extractCitations(text: string): Citation[] {
   return citations
 }
 
-/** Extract every sourcePath="..." value from a formatted context string. */
+/** Extract every sourcePath from a formatted context string. */
 export function extractSourcePathsFromContext(context: string): Set<string> {
   const paths = new Set<string>()
-  const regex = /sourcePath="([^"]+)"/g
+  // Accept both the formatted provenance line (sourcePath="...") and the
+  // JSON-serialized form ("sourcePath": "...") used for agent tool results.
+  const regex = /sourcePath="([^"]+)"|"sourcePath"\s*:\s*"([^"]+)"/g
   let match: RegExpExecArray | null
   while ((match = regex.exec(context)) !== null) {
-    const path = match[1]
+    const path = match[1] ?? match[2]
     if (path) paths.add(path)
   }
   return paths

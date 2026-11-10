@@ -242,7 +242,11 @@ async function resolveDependencyTarget(
   npmRepositoryId: string,
 ): Promise<string> {
   const match = await prisma.package.findFirst({
-    where: { name: dependencyName, repository: { name: { not: "npm" } } },
+    where: {
+      name: dependencyName,
+      removedAt: null,
+      repository: { name: { not: "npm" } },
+    },
     select: { id: true },
   })
   if (match) return match.id
@@ -575,6 +579,7 @@ export async function completeIngestionRun(
     where: { id: runId },
     data: {
       completedAt: new Date(),
+      retrievedAt: new Date(),
       status,
       packagesCount: counts.packages,
       modulesCount: counts.modules,

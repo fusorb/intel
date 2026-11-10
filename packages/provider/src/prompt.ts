@@ -8,6 +8,7 @@ Instructions:
 - Answer using ONLY the context provided below. Do not use prior knowledge or make assumptions.
 - For every factual claim, provide an inline citation: [source: <sourcePath>, commit: <sourceCommitSha>].
 - If the context does not contain enough information to answer, say "I don't know" rather than guessing.
+- Decisions carry a status: treat "superseded" and "deferred" decisions as not in force, and "proposed" decisions as recorded but not yet ratified.
 - cite sourcePath and sourceCommitSha from each fact's provenance. If a commit SHA is not available, cite "N/A".`
 
 /**

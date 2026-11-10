@@ -2,7 +2,7 @@
 
 import type { Answer, GenerateRequest, IntelligenceProvider } from "./types.js"
 import { Anthropic } from "@anthropic-ai/sdk"
-import { SYSTEM_PROMPT } from "./prompt.js"
+import { SYSTEM_PROMPT, buildMessages } from "./prompt.js"
 import { finalizeAnswer } from "./citations.js"
 
 export interface AnthropicProviderOptions {
@@ -24,19 +24,26 @@ export class AnthropicProvider implements IntelligenceProvider {
   }
 
   async generate(request: GenerateRequest): Promise<Answer> {
-    const userMessage =
-      `Question: ${request.question}\n\n` +
-      `${request.context}\n\n` +
-      `Answer the question using ONLY the context above. ` +
-      `For every factual claim, cite the source inline as ` +
-      `[source: <sourcePath>, commit: <sourceCommitSha>]. ` +
-      `If you don't know, say so.`
+    // Honor request.messages when present (the agent loop drives the
+    // conversation through them); otherwise fall back to the single-shot prompt.
+    const all = buildMessages(request)
+    const systemPrompt =
+      all
+        .filter((m) => m.role === "system")
+        .map((m) => m.content)
+        .join("\n\n") || SYSTEM_PROMPT
+    const messages = all
+      .filter((m) => m.role !== "system")
+      .map((m) => ({
+        role: m.role === "assistant" ? ("assistant" as const) : ("user" as const),
+        content: m.content,
+      }))
 
     const response = await this.client.messages.create({
       model: this.modelName,
       max_tokens: 8192,
-      system: SYSTEM_PROMPT,
-      messages: [{ role: "user", content: userMessage }],
+      system: systemPrompt,
+      messages,
     })
 
     const text = (response.content as Array<{ type: string; text?: string }>)

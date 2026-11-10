@@ -50,10 +50,41 @@ export async function ingestRepo(
 
   const runId = await startIngestionRun(repoId, commitSha, effectiveBranch)
 
+  const extracted = extractRepo(dest)
+
+  // Guard: never soft-delete a repo's graph on the strength of an empty
+  // extraction (bad branch, partial clone, or an unreadable tree). Without
+  // this, a failed walk would tombstone every existing entity while the run
+  // still reported success.
+  if (
+    extracted.packages.length === 0 &&
+    extracted.modules.length === 0 &&
+    extracted.documents.length === 0
+  ) {
+    const message =
+      `extraction found no packages/modules/documents for ${repoName} at ${commitSha} — ` +
+      `refusing to mark the existing graph stale`
+    await completeIngestionRun(
+      runId,
+      "failed",
+      {
+        packages: 0,
+        modules: 0,
+        documents: 0,
+        symbols: 0,
+        consumesEdges: 0,
+        containsEdges: 0,
+        symbolFilesParsed: 0,
+        symbolFilesSkipped: 0,
+        symbolFilesErrored: 0,
+      },
+      [message],
+    )
+    throw new Error(message)
+  }
+
   // Re-ingest is idempotent: soft-delete stale rows, then refresh the current set.
   await markStale(repoId)
-
-  const extracted = extractRepo(dest)
 
   const errors: string[] = []
   const warnings: string[] = []

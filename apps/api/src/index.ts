@@ -15,6 +15,16 @@ if (config.authMode === "token" && !config.authToken) {
   process.exit(1)
 }
 
+if (config.authMode === "none" && process.env.NODE_ENV === "production") {
+  console.error(
+    JSON.stringify({
+      level: "error",
+      msg: "INTEL_API_AUTH=none is development-only — refusing to start in production",
+    }),
+  )
+  process.exit(1)
+}
+
 const app = createApp(defaultDeps, config)
 
 const port = Number(process.env.PORT ?? 8787)

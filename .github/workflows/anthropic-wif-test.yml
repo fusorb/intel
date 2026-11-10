@@ -1,5 +1,8 @@
 name: anthropic-wif-test
-on: push
+# Manual-only: this workflow mints a GitHub OIDC token and exchanges it for an
+# Anthropic access token, so it must never fire automatically on push.
+on:
+  workflow_dispatch:
 permissions:
   id-token: write
   contents: read

@@ -33,7 +33,7 @@ export interface ToolDefinition {
   name: string
   description: string
   parameters: ToolParameter[]
-  handler: (args: Record<string, any>) => Promise<any>
+  handler: (args: Record<string, unknown>) => Promise<unknown>
 }
 
 const tools: Map<string, ToolDefinition> = new Map()
@@ -46,15 +46,60 @@ export function getToolDefinitions(): ToolDefinition[] {
   return Array.from(tools.values())
 }
 
+/** Reject calls that omit a parameter the tool marks as required. */
+function assertRequiredArgs(
+  tool: ToolDefinition,
+  args: Record<string, unknown>,
+): void {
+  for (const p of tool.parameters) {
+    if (!p.required) continue
+    const value = args[p.name]
+    if (
+      value === undefined ||
+      value === null ||
+      (typeof value === "string" && value.trim() === "")
+    ) {
+      throw new Error(
+        `Tool "${tool.name}" is missing required argument: ${p.name}`,
+      )
+    }
+  }
+}
+
 export async function executeTool(
   name: string,
-  args: Record<string, any>,
-): Promise<any> {
+  args: Record<string, unknown> = {},
+): Promise<unknown> {
   const tool = tools.get(name)
   if (!tool) {
     throw new Error(`Unknown tool: ${name}`)
   }
+  assertRequiredArgs(tool, args)
   return tool.handler(args)
+}
+
+function requireString(args: Record<string, unknown>, key: string): string {
+  const value = args[key]
+  if (typeof value !== "string" || value.trim() === "") {
+    throw new Error(`Expected a non-empty string argument: ${key}`)
+  }
+  return value
+}
+
+function optionalString(
+  args: Record<string, unknown>,
+  key: string,
+): string | undefined {
+  const value = args[key]
+  return typeof value === "string" && value.trim() !== "" ? value : undefined
+}
+
+function optionalNumber(
+  args: Record<string, unknown>,
+  key: string,
+): number | undefined {
+  const value = args[key]
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined
 }
 
 // --- search_repo ---
@@ -159,7 +204,7 @@ registerTool({
   parameters: [
     { name: "query", type: "string", description: "Search query", required: true },
   ],
-  handler: async (args) => searchRepo(args.query),
+  handler: async (args) => searchRepo(requireString(args, "query")),
 })
 
 registerTool({
@@ -169,7 +214,8 @@ registerTool({
     { name: "repositoryName", type: "string", description: "Repository name", required: true },
     { name: "path", type: "string", description: "Document path", required: true },
   ],
-  handler: async (args) => readDocument(args.repositoryName, args.path),
+  handler: async (args) =>
+    readDocument(requireString(args, "repositoryName"), requireString(args, "path")),
 })
 
 registerTool({
@@ -179,7 +225,11 @@ registerTool({
     { name: "repositoryName", type: "string", description: "Repository name", required: true },
     { name: "packageName", type: "string", description: "Package name", required: true },
   ],
-  handler: async (args) => inspectDependencies(args.repositoryName, args.packageName),
+  handler: async (args) =>
+    inspectDependencies(
+      requireString(args, "repositoryName"),
+      requireString(args, "packageName"),
+    ),
 })
 
 registerTool({
@@ -191,7 +241,12 @@ registerTool({
     { name: "kind", type: "string", description: "Symbol kind", required: false },
     { name: "limit", type: "number", description: "Result limit", required: false },
   ],
-  handler: async (args) => findSymbol(args.name, args),
+  handler: async (args) =>
+    findSymbol(requireString(args, "name"), {
+      repositoryName: optionalString(args, "repositoryName"),
+      kind: optionalString(args, "kind"),
+      limit: optionalNumber(args, "limit"),
+    }),
 })
 
 registerTool({
@@ -201,7 +256,8 @@ registerTool({
     { name: "symbolId", type: "string", description: "Symbol ID", required: true },
     { name: "symbolName", type: "string", description: "Symbol name", required: false },
   ],
-  handler: async (args) => findCallers(args.symbolId, args.symbolName),
+  handler: async (args) =>
+    findCallers(requireString(args, "symbolId"), optionalString(args, "symbolName")),
 })
 
 registerTool({
@@ -210,6 +266,6 @@ registerTool({
   parameters: [
     { name: "symbolId", type: "string", description: "Symbol ID", required: true },
   ],
-  handler: async (args) => findReferences(args.symbolId),
+  handler: async (args) => findReferences(requireString(args, "symbolId")),
 })
 

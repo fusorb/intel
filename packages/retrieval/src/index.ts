@@ -801,6 +801,7 @@ export async function searchContent(
         content: null,
         provenance: extractProvenance(dec),
         score: substringScore(dec.evidenceLevel),
+        status: dec.status,
       })
     }
   }
@@ -1566,6 +1567,9 @@ export function formatContext(result: RetrievalResult): string {
           ? "npm (external)"
           : ""
         lines.push(`[Package: ${e.name}]${repoName ? ` (${repoName})` : ""}`)
+      } else if (e.entityType === "DECISION") {
+        const status = e.status ? ` (status: ${e.status})` : ""
+        lines.push(`[Decision: ${e.name}]${status}`)
       } else {
         lines.push(`[${e.entityType}] ${e.name}`)
       }

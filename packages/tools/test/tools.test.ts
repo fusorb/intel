@@ -56,4 +56,19 @@ describe("tool registry", () => {
     const result = await executeTool("test_registry_echo", { v: "x" })
     expect(result).toEqual({ echoed: "x" })
   })
+
+  it("executeTool rejects a call missing a required argument", async () => {
+    registerTool({
+      name: "test_registry_requires",
+      description: "test-only required arg",
+      parameters: [{ name: "v", type: "string", description: "value", required: true }],
+      handler: async (args) => ({ echoed: args.v }),
+    })
+    await expect(executeTool("test_registry_requires", {})).rejects.toThrow(
+      /missing required argument: v/,
+    )
+    await expect(executeTool("test_registry_requires", { v: "  " })).rejects.toThrow(
+      /missing required argument: v/,
+    )
+  })
 })
