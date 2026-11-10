@@ -336,6 +336,7 @@ interface RetrievedEntity {
   entityType: string; id: string; name: string; path: string
   description: string | null; content: string | null
   provenance: ProvenanceInfo; score: number; repositoryName?: string | null
+  status?: string   // DECISION only: active | proposed | superseded | deferred
 }
 interface RetrievedRelationship {
   id: string; kind: string
@@ -453,3 +454,11 @@ against `@fusorb/intel-tools`, feeds results back, and stops at `maxSteps` (defa
 `intel.fusorb.com`. It is an application, not an importable package. Routes (`/health`, `/ask`,
 `/ask/agent`, `/search`, `/symbols`, `/symbols/:id/{callers,references}`, `/decisions`,
 `/violations`) are documented in `README.md`; the handlers live in `apps/api/src/server.ts`.
+
+### `GET /decisions`
+
+Returns `{ decisions: RetrievedEntity[] }` — every decision that is **not retired**
+(`status` in {`active`, `proposed`}). Each `DECISION` entity carries its `status`
+(`active` | `proposed` | `superseded` | `deferred`) so a client can tell a ratified decision
+from one that is only recorded (`proposed`). The field is additive: existing entity fields are
+unchanged, and `status` is populated only for `DECISION` entities — other entity types omit it.

@@ -18,6 +18,12 @@ import type { DecisionSeed, DecisionTarget } from "./decisions.js"
 /** `decisions/0005-ui-invariant.md` — the ADR that defines the UI invariant. */
 export const UI_INVARIANT_SOURCE_PATH = "decisions/0005-ui-invariant.md"
 
+/**
+ * `decisions/0000-template.md` — the ADR scaffold, vendored alongside the real
+ * ADRs. It is the blank template, not a decision, so `loadAdrDecisions()` skips it.
+ */
+export const ADR_TEMPLATE_FILE = "0000-template.md"
+
 const FRONTMATTER_FENCE = /^---\s*$/
 const BLOCK_ITEM = /^\s*-\s+(.*)$/
 const KEY_VALUE = /^([A-Za-z0-9_.-]+):\s*(.*)$/
@@ -277,7 +283,8 @@ function asStringArray(value: FrontmatterValue | undefined): string[] {
 }
 
 /**
- * Parse every vendored ADR into a `DecisionSeed`, sorted by filename.
+ * Parse every vendored ADR into a `DecisionSeed`, sorted by filename. The ADR
+ * template (`0000-template.md`) is skipped — it is a scaffold, not a decision.
  *
  * `key` is the filename stem (the ADR's stable ordinal slug, e.g.
  * `0007-identity-authority`) — it is stable and human-readable, and it is what
@@ -301,6 +308,9 @@ export function loadAdrDecisions(vendorDir: string = defaultVendorDir()): Decisi
 
   const files = readdirSync(decisionsDir)
     .filter((name) => name.endsWith(".md"))
+    // `0000-template.md` is the ADR template scaffold, not a decision — skip it so
+    // it never becomes a seeded Decision.
+    .filter((name) => name !== ADR_TEMPLATE_FILE)
     .sort()
 
   return files.map((file) => {

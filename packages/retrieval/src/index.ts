@@ -62,6 +62,11 @@ export interface RetrievedEntity {
   provenance: ProvenanceInfo
   score: number
   repositoryName?: string | null
+  /**
+   * Decision status (`active` | `proposed` | `superseded` | `deferred`), set only
+   * for `DECISION` entities; omitted for every other entity type.
+   */
+  status?: string
 }
 
 export interface RetrievedRelationship {
@@ -1208,6 +1213,7 @@ export async function getActiveDecisions(): Promise<RetrievedEntity[]> {
     content: null,
     provenance: extractProvenance(d),
     score: 1.0,
+    status: d.status,
   }))
 }
 

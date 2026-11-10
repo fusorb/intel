@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { existsSync } from "node:fs"
+import { existsSync, readdirSync } from "node:fs"
 import { resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 import {
@@ -13,6 +13,7 @@ import {
   loadSourceCommitSha,
   defaultVendorDir,
   UI_INVARIANT_SOURCE_PATH,
+  ADR_TEMPLATE_FILE,
   ECOSYSTEM_DECISIONS,
   type DecisionSeed,
 } from "@fusorb/intel-ingest"
@@ -206,6 +207,16 @@ describe("loadAdrDecisions", () => {
   it("loads exactly the 8 vendored ADRs, sorted by filename", () => {
     expect(seeds).toHaveLength(8)
     expect(seeds.map((s) => s.key)).toEqual(EXPECTED_ADR_KEYS)
+  })
+
+  it("excludes the ADR template (0000-template.md) from the seeds", () => {
+    // The vendored decisions/ dir holds 9 `.md` files: the template plus 8 ADRs.
+    const onDisk = readdirSync(resolve(VENDOR, "decisions")).filter((n) => n.endsWith(".md"))
+    expect(onDisk).toContain(ADR_TEMPLATE_FILE)
+    expect(onDisk).toHaveLength(9)
+    expect(seeds).toHaveLength(8)
+    expect(seeds.some((s) => s.key === "0000-template")).toBe(false)
+    expect(seeds.some((s) => s.sourcePath === `decisions/${ADR_TEMPLATE_FILE}`)).toBe(false)
   })
 
   it("gives every ADR a stable filename-stem key and matching sourcePath", () => {

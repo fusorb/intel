@@ -1,6 +1,6 @@
 {
   "sourceCommit": "634cef0261e8e6385de00f36d23fcc7c6c0bf027",
-  "syncedAt": "2026-11-06T07:59:42.661Z",
+  "syncedAt": "2026-11-08T07:42:21.671Z",
   "files": [
     {
       "path": "ecosystem.json",
@@ -11,28 +11,8 @@
       "sha256": "e6ee545a05cb42c97d76a620ca9e1d022bbe66838ec93f1035e70c18c3b0d97e"
     },
     {
-      "path": "tools/check-legacy-names.mjs",
-      "sha256": "324f0425215ced17621009ecf37ca9baba7916520e3aa16d5b2b4ec20dc274ce"
-    },
-    {
-      "path": "tools/lib/fs-walk.mjs",
-      "sha256": "66305827d54377230a053ca3cd2139186636373ab94c3f6ce7587e58c28ef2c1"
-    },
-    {
-      "path": "tools/lib/glob.mjs",
-      "sha256": "f8c8282a71a41238c87b2cd0e13c1bc4ebdf9a72f307de05170786fcba2732f1"
-    },
-    {
-      "path": "tools/lib/frontmatter.mjs",
-      "sha256": "ebd89720adc02522d3e8925a7db643a23cb42f4fe5099e62248947a0e08df7ca"
-    },
-    {
-      "path": "tools/lib/derived-facts.mjs",
-      "sha256": "25a829fea2c7cc2ce4915d517ddf95dc666682598715d0eef4c5f7f22e56122c"
-    },
-    {
-      "path": "tools/lib/links.mjs",
-      "sha256": "ba989c83349dc89960d4ee8163b8e890798b5347178abb715949f6bebc45db08"
+      "path": "decisions/0000-template.md",
+      "sha256": "850328049f779e4a66e380b6ab75e1df33271e357bfe34855275535973a4f80f"
     },
     {
       "path": "decisions/0001-role-and-boundary.md",
@@ -67,32 +47,56 @@
       "sha256": "380cf5004d028298bbcedbddc10e9b5f209ee0f25c06139ef0039c3336084724"
     },
     {
-      "path": "standards/agent-protocol.md",
+      "path": "content/standards/agent-protocol.md",
       "sha256": "5656dc09014240f2ddc4f49452bdadc26a8379d175c8edf1d9706465fc62025e"
     },
     {
-      "path": "standards/domains-and-deploy.md",
+      "path": "content/standards/domains-and-deploy.md",
       "sha256": "301dd1fe3b164fb9a384780155c7afa0744a80e6326838140875c5eb6a9f92ab"
     },
     {
-      "path": "standards/facts-and-sources.md",
+      "path": "content/standards/facts-and-sources.md",
       "sha256": "f5b60528ec67cb41ee2b02a097611deb67bc6dfbd292d3331211d3f43e19c372"
     },
     {
-      "path": "standards/naming.md",
+      "path": "content/standards/naming.md",
       "sha256": "3528826634a54498d5c831ce7516235839f32b09a72ed3abd631604b1f1f18e6"
     },
     {
-      "path": "standards/repo-structure.md",
+      "path": "content/standards/repo-structure.md",
       "sha256": "c48aeb8d8e0912acb8293d22814af0311cd29d90acb5cc650694e73147727415"
     },
     {
-      "path": "standards/ui-invariant.md",
+      "path": "content/standards/ui-invariant.md",
       "sha256": "2f1b08deabe24598711f9f80fcf5da3b2ace260e7b1a26eb3eaffb3d90dce913"
     },
     {
-      "path": "standards/versioning-and-releases.md",
+      "path": "content/standards/versioning-and-releases.md",
       "sha256": "1552018d7f482f529531b80a2d7dba75650cd5b435353b5725b116cb2fe4ad52"
+    },
+    {
+      "path": "tools/check-legacy-names.mjs",
+      "sha256": "324f0425215ced17621009ecf37ca9baba7916520e3aa16d5b2b4ec20dc274ce"
+    },
+    {
+      "path": "tools/lib/fs-walk.mjs",
+      "sha256": "66305827d54377230a053ca3cd2139186636373ab94c3f6ce7587e58c28ef2c1"
+    },
+    {
+      "path": "tools/lib/glob.mjs",
+      "sha256": "f8c8282a71a41238c87b2cd0e13c1bc4ebdf9a72f307de05170786fcba2732f1"
+    },
+    {
+      "path": "tools/lib/frontmatter.mjs",
+      "sha256": "ebd89720adc02522d3e8925a7db643a23cb42f4fe5099e62248947a0e08df7ca"
+    },
+    {
+      "path": "tools/lib/derived-facts.mjs",
+      "sha256": "25a829fea2c7cc2ce4915d517ddf95dc666682598715d0eef4c5f7f22e56122c"
+    },
+    {
+      "path": "tools/lib/links.mjs",
+      "sha256": "ba989c83349dc89960d4ee8163b8e890798b5347178abb715949f6bebc45db08"
     }
   ]
 }

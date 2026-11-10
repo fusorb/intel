@@ -93,6 +93,43 @@ describe("intel-api", () => {
     expect(res.status).toBe(200)
   })
 
+  it("returns the decision status on /decisions", async () => {
+    const app = createApp(
+      makeDeps({
+        getActiveDecisions: async () => [
+          {
+            entityType: "DECISION",
+            id: "d1",
+            name: "SovGrant is the canonical identity provider",
+            path: "SovGrant is the canonical identity provider",
+            description: "single Identity Provider",
+            content: null,
+            provenance: {
+              sourcePath: "decisions/0007-identity-authority.md",
+              sourceType: "file",
+              sourceCommitSha: "634cef02",
+              firstSeenAt: new Date(),
+              retrievedAt: new Date(),
+              evidenceLevel: "verified",
+              removedAt: null,
+            },
+            score: 1.0,
+            status: "proposed",
+          },
+        ],
+      }),
+      makeConfig(),
+    )
+    const res = await app.request("/decisions")
+    expect(res.status).toBe(200)
+    const body = (await res.json()) as {
+      decisions: Array<{ entityType: string; status?: string }>
+    }
+    expect(body.decisions).toHaveLength(1)
+    expect(body.decisions[0]!.entityType).toBe("DECISION")
+    expect(body.decisions[0]!.status).toBe("proposed")
+  })
+
   it("sets security headers on every response", async () => {
     const app = createApp(makeDeps(), makeConfig())
     const res = await app.request("/health")

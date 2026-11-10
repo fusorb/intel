@@ -39,6 +39,7 @@ export {
   loadSourceCommitSha,
   defaultVendorDir,
   UI_INVARIANT_SOURCE_PATH,
+  ADR_TEMPLATE_FILE,
 } from "./adr.js"
 export type { Frontmatter, FrontmatterValue, ParsedAdr } from "./adr.js"
 export {
