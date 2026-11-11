@@ -226,7 +226,7 @@ async function resolveEntityNames(
     switch (type) {
       case "REPOSITORY": {
         const rows = await prisma.repository.findMany({
-          where: { id: { in: ids } },
+          where: { id: { in: ids }, removedAt: null },
           select: { id: true, name: true },
         })
         for (const r of rows) names.set(r.id, r.name)
@@ -234,7 +234,7 @@ async function resolveEntityNames(
       }
       case "PACKAGE": {
         const rows = await prisma.package.findMany({
-          where: { id: { in: ids } },
+          where: { id: { in: ids }, removedAt: null },
           select: { id: true, name: true },
         })
         for (const p of rows) names.set(p.id, p.name)
@@ -242,7 +242,7 @@ async function resolveEntityNames(
       }
       case "MODULE": {
         const rows = await prisma.module.findMany({
-          where: { id: { in: ids } },
+          where: { id: { in: ids }, removedAt: null },
           select: { id: true, name: true },
         })
         for (const m of rows) names.set(m.id, m.name)
@@ -250,7 +250,7 @@ async function resolveEntityNames(
       }
       case "DOCUMENT": {
         const rows = await prisma.document.findMany({
-          where: { id: { in: ids } },
+          where: { id: { in: ids }, removedAt: null },
           select: { id: true, title: true, path: true },
         })
         for (const d of rows) names.set(d.id, d.title ?? d.path)
@@ -266,7 +266,7 @@ async function resolveEntityNames(
       }
       case "SYMBOL": {
         const rows = await prisma.symbol.findMany({
-          where: { id: { in: ids } },
+          where: { id: { in: ids }, removedAt: null },
           select: { id: true, name: true },
         })
         for (const s of rows) names.set(s.id, s.name)
@@ -352,13 +352,14 @@ export async function findSymbol(
 }
 
 /**
- * Find callers of a symbol. First tries REFERENCES edges from other symbols;
- * if none found, does best-effort fallback by searching for symbol name
- * references across the graph.
+ * Find callers of a symbol via REFERENCES edges from other symbols. Returns an
+ * empty result when the symbol has no incoming REFERENCES edges — the graph
+ * reports only callers it has evidence for, never a guess.
+ * (`_symbolName` is retained for signature/API compatibility.)
  */
 export async function findCallers(
   symbolId: string,
-  symbolName?: string,
+  _symbolName?: string,
 ): Promise<RetrievalResult> {
   const result: RetrievalResult = {
     entities: [],
@@ -372,7 +373,7 @@ export async function findCallers(
     // Get the source entities (symbols that reference this symbol)
     const sourceIds = edgeResults.map((r) => r.fromId)
     const sources = await prisma.symbol.findMany({
-      where: { id: { in: sourceIds } },
+      where: { id: { in: sourceIds }, removedAt: null },
       include: { repository: true },
     })
     for (const s of sources) {
@@ -394,35 +395,9 @@ export async function findCallers(
     return result
   }
 
-  // Fallback: if we have a name, find other symbols that might reference it
-  if (symbolName) {
-    const target = await prisma.symbol.findUnique({ where: { id: symbolId }, include: { repository: true } })
-    if (target) {
-      const candidates = await prisma.symbol.findMany({
-        where: {
-          repositoryId: target.repositoryId,
-          id: { not: symbolId },
-          removedAt: null,
-        },
-        include: { repository: true },
-        take: 50,
-      })
-      for (const c of candidates) {
-        result.entities.push({
-          entityType: "SYMBOL",
-          id: c.id,
-          name: c.name,
-          path: c.path,
-          description: c.kind ? `kind: ${c.kind}` : "potential caller (best-effort)",
-          content: null,
-          provenance: extractProvenance(c),
-          score: 0.3,
-          repositoryName: c.repository?.name ?? null,
-        })
-      }
-    }
-  }
-
+  // No REFERENCES edges → no known callers. We deliberately do not guess by
+  // listing sibling symbols: the graph must not invent callers it has no
+  // evidence for.
   return result
 }
 
@@ -448,7 +423,7 @@ export async function findReferences(
   if (edges.length > 0) {
     const targetIds = edges.map((e) => e.toEntityId)
     const targets = await prisma.symbol.findMany({
-      where: { id: { in: targetIds } },
+      where: { id: { in: targetIds }, removedAt: null },
       include: { repository: true },
     })
     for (const s of targets) {
@@ -571,7 +546,7 @@ export async function searchPackage(
  */
 export async function searchRepository(name: string): Promise<RetrievedEntity[]> {
   const repos = await prisma.repository.findMany({
-    where: { name: { equals: name, mode: "insensitive" } },
+    where: { name: { equals: name, mode: "insensitive" }, removedAt: null },
   })
 
   return repos.map((r) => ({
@@ -650,7 +625,7 @@ export async function searchContent(
 
     // --- Exact repository name match ---
     const exactRepos = await prisma.repository.findMany({
-      where: { name: { equals: keyword, mode: "insensitive" } },
+      where: { name: { equals: keyword, mode: "insensitive" }, removedAt: null },
       take: limit,
     })
     for (const r of exactRepos) {
@@ -703,6 +678,7 @@ export async function searchContent(
           { url: { contains: keyword, mode: "insensitive" } },
         ],
         NOT: { name: { equals: keyword, mode: "insensitive" } },
+        removedAt: null,
       },
       take: limit,
     })
@@ -828,8 +804,8 @@ export async function getDependencies(
     documents: [],
   }
 
-  const repo = await prisma.repository.findUnique({
-    where: { name: repositoryName },
+  const repo = await prisma.repository.findFirst({
+    where: { name: repositoryName, removedAt: null },
     select: {
       id: true,
       name: true,
@@ -901,7 +877,7 @@ export async function getDependencies(
   )
 
   const targetPackages = await prisma.package.findMany({
-    where: { id: { in: tgtIds } },
+    where: { id: { in: tgtIds }, removedAt: null },
     include: { repository: true },
   })
   for (const p of targetPackages) {
@@ -969,7 +945,7 @@ export async function getPackageDependencies(
 
   const targetIds = edges.map((e) => e.toEntityId)
   const targets = await prisma.package.findMany({
-    where: { id: { in: targetIds } },
+    where: { id: { in: targetIds }, removedAt: null },
     include: { repository: true },
   })
 
@@ -1062,7 +1038,7 @@ export async function getDependents(
   )
 
   const sourcePackages = await prisma.package.findMany({
-    where: { id: { in: srcIds } },
+    where: { id: { in: srcIds }, removedAt: null },
     include: { repository: true },
   })
   for (const p of sourcePackages) {
@@ -1258,7 +1234,7 @@ export async function getDecisionViolations(): Promise<RetrievalResult> {
     .map((v) => v.fromEntityId)
   if (pkgSourceIds.length > 0) {
     const pkgs = await prisma.package.findMany({
-      where: { id: { in: pkgSourceIds } },
+      where: { id: { in: pkgSourceIds }, removedAt: null },
       include: { repository: true },
     })
     for (const p of pkgs) {
@@ -1281,7 +1257,7 @@ export async function getDecisionViolations(): Promise<RetrievalResult> {
     .map((v) => v.fromEntityId)
   if (repSourceIds.length > 0) {
     const repos = await prisma.repository.findMany({
-      where: { id: { in: repSourceIds } },
+      where: { id: { in: repSourceIds }, removedAt: null },
     })
     for (const r of repos) {
       violatingEntities.push({
@@ -1387,7 +1363,7 @@ export async function getGovernedEntities(
   const pkgIds = idsOfType("PACKAGE")
   if (pkgIds.length > 0) {
     const pkgs = await prisma.package.findMany({
-      where: { id: { in: pkgIds } },
+      where: { id: { in: pkgIds }, removedAt: null },
       include: { repository: true },
     })
     for (const p of pkgs) {
@@ -1410,7 +1386,7 @@ export async function getGovernedEntities(
   const repoIds = idsOfType("REPOSITORY")
   if (repoIds.length > 0) {
     const repos = await prisma.repository.findMany({
-      where: { id: { in: repoIds } },
+      where: { id: { in: repoIds }, removedAt: null },
     })
     for (const r of repos) {
       refs.push({ id: r.id, type: "REPOSITORY" })
@@ -1431,7 +1407,7 @@ export async function getGovernedEntities(
   const modIds = idsOfType("MODULE")
   if (modIds.length > 0) {
     const mods = await prisma.module.findMany({
-      where: { id: { in: modIds } },
+      where: { id: { in: modIds }, removedAt: null },
       include: { repository: true },
     })
     for (const m of mods) {
@@ -1513,12 +1489,60 @@ export async function retrieve(
     mergeResults(result, depResult)
   }
 
-  // 3. For each found package that's an external npm placeholder, find what
-  //    depends on it. For internal packages, find their dependents too.
+  // 3. Find what depends on every retrieved package in a single pass. Doing
+  //    this per package was an unbounded N+1; one edge query + one source-package
+  //    query + one name-resolution pass covers the whole set.
   const packages = result.entities.filter((e) => e.entityType === "PACKAGE")
-  for (const pkg of packages) {
-    const depResult = await getDependents(pkg.name)
-    mergeResults(result, depResult)
+  if (packages.length > 0) {
+    const pkgIds = packages.map((p) => p.id)
+    const dependEdges = await prisma.relationship.findMany({
+      where: {
+        toEntityId: { in: pkgIds },
+        toEntityType: "PACKAGE",
+        kind: "CONSUMES",
+        removedAt: null,
+      },
+    })
+    if (dependEdges.length > 0) {
+      const srcIds = [...new Set(dependEdges.map((e) => e.fromEntityId))]
+      const sourcePackages = await prisma.package.findMany({
+        where: { id: { in: srcIds }, removedAt: null },
+        include: { repository: true },
+      })
+      const nameMap = await resolveEntityNames([
+        ...srcIds.map((id) => ({ id, type: "PACKAGE" })),
+        ...pkgIds.map((id) => ({ id, type: "PACKAGE" })),
+      ])
+      for (const p of sourcePackages) {
+        result.entities.push({
+          entityType: "PACKAGE",
+          id: p.id,
+          name: p.name,
+          path: p.sourcePath,
+          description: p.description,
+          content: null,
+          provenance: extractProvenance(p),
+          score: 0.8,
+          repositoryName: p.repository?.name ?? null,
+        })
+      }
+      for (const edge of dependEdges) {
+        result.relationships.push({
+          id: edge.id,
+          kind: edge.kind,
+          fromId: edge.fromEntityId,
+          fromType: "PACKAGE",
+          fromName: nameMap.get(edge.fromEntityId) ?? edge.fromEntityId,
+          toId: edge.toEntityId,
+          toType: "PACKAGE",
+          toName: nameMap.get(edge.toEntityId) ?? edge.toEntityId,
+          note: edge.note,
+          depType: edge.depType,
+          provenance: extractProvenance(edge),
+          score: 0.8 * evidenceMultiplier(edge.evidenceLevel),
+        })
+      }
+    }
   }
 
   // 4. Include non-retired decisions (active or proposed) and any violations

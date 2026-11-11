@@ -12,6 +12,7 @@ import {
   findSymbol,
   findCallers,
   findReferences,
+  retrieve,
 } from "@fusorb/intel-retrieval"
 
 const hasDb = Boolean(process.env.DATABASE_URL)
@@ -208,5 +209,60 @@ describe("findCallers / findReferences", () => {
     const callers = await findCallers(edge.toEntityId)
     expect(callers.relationships.length).toBeGreaterThan(0)
     expect(callers.relationships.every((r) => r.kind === "REFERENCES")).toBe(true)
+  })
+})
+
+describe("findCallers fallback removal", () => {
+  it("returns empty (no guessed siblings) for a symbol with no incoming REFERENCES", async () => {
+    if (!hasDb) return
+    const candidates = await prisma.symbol.findMany({
+      where: { removedAt: null },
+      select: { id: true, name: true },
+      take: 100,
+    })
+    for (const s of candidates) {
+      const incoming = await prisma.relationship.count({
+        where: {
+          toEntityId: s.id,
+          toEntityType: "SYMBOL",
+          kind: "REFERENCES",
+          removedAt: null,
+        },
+      })
+      if (incoming === 0) {
+        const callers = await findCallers(s.id, s.name)
+        expect(callers.entities).toEqual([])
+        expect(callers.relationships).toEqual([])
+        return
+      }
+    }
+    // No edge-free symbol in the sample — nothing to assert.
+  })
+})
+
+describe("soft-delete filtering in secondary lookups", () => {
+  it("excludes a soft-deleted repository from searchRepository", async () => {
+    if (!hasDb) return
+    const repo = await prisma.repository.findFirst({
+      where: { name: "sovport", removedAt: null },
+      select: { id: true },
+    })
+    if (!repo) return
+
+    await prisma.repository.update({ where: { id: repo.id }, data: { removedAt: new Date() } })
+    try {
+      const found = await searchRepository("sovport")
+      expect(found).toEqual([])
+    } finally {
+      await prisma.repository.update({ where: { id: repo.id }, data: { removedAt: null } })
+    }
+  })
+})
+
+describe("retrieve (batched dependents)", () => {
+  it("still returns CONSUMES dependents for a package-heavy question", async () => {
+    if (!hasDb) return
+    const result = await retrieve("facet components auth sovgrant relnex", { limit: 20 })
+    expect(result.relationships.some((r) => r.kind === "CONSUMES")).toBe(true)
   })
 })
