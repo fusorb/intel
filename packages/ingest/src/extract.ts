@@ -6,6 +6,11 @@ import type { ExtractedPackage, ExtractedModule, ExtractedDocument, ExtractedRep
 const SKIP_DIRS = new Set([
   ".git",
   "node_modules",
+  // Vendored/third-party trees are input, not first-party source, so they are not
+  // walked for modules or documents. This keeps a consumer's vendored snapshot
+  // (e.g. Intel's own `vendor/fusorb`) from being ingested as a duplicate of the
+  // canonical facts it only mirrors.
+  "vendor",
   "dist",
   "dist-test",
   "build",

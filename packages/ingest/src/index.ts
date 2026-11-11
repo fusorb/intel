@@ -48,6 +48,7 @@ export {
   parseFile,
   linkSymbols,
 } from "./parser.js"
+export { extractRepo, collectSourceFiles } from "./extract.js"
 export type {
   SymbolKind,
   SymbolInfo,
