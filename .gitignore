@@ -67,14 +67,12 @@ Thumbs.db
 *.tsbuildinfo
 
 # Local scratch, clones, logs, and tool-managed config (not project source)
-# Agent-tool files: track only taste/ (reviewed, shared preferences); everything
-# else under .commandcode/ is machine-specific (see the agent-protocol standard).
+# All of .commandcode/ is machine-specific agent-tool state (see the
+# agent-protocol standard); nothing under it is tracked.
 # .agent/ is local scratch, except the episodic canon, which is tracked
 /.agent/*
 !/.agent/episodes.md
-/.commandcode/*
-!/.commandcode/taste/
-!/.commandcode/taste/**
+/.commandcode/
 
 # Agent/user scratch and run artifacts
 /scratchpad/
