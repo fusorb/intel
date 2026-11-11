@@ -207,13 +207,49 @@ How we fixed it:
   hash offline.
 
 What survived:
-  The tracker became machine-checkable. The catch: the shared tool hardcodes
-  its profiles to `names|full`, so ADRs (`decisions/*.md`) and standards
-  (`content/standards/*`) can't be vendored without modifying it — a real gap
-  logged upstream.
+  The tracker became machine-checkable. The catch, at the time: the shared tool
+  offered only `names|full`, so ADRs (`decisions/*.md`) and standards
+  (`content/standards/*`) couldn't be vendored — a real gap logged upstream.
+  (Resolved later — see EP 10's `intel` profile.)
 
 State: automated. Snapshot synced against fusorb `634cef02`; check passes.
 
 Lesson: a fact you can't verify is a fact you can't trust.
+
+================================================================================
+
+EP 10 -- The Profiles That Grew, and the Deploy That Would Not Start
+--------------------------------------------------------------------------------
+What broke:
+  Two things. (1) EP09's gap: the shared sync tool offered only `names|full`,
+  so ADRs (`decisions/*.md`) and standards (`content/standards/*`) could not be
+  vendored — Intel's decisions had no verifiable source. (2) The deploy path
+  was latently broken: `docker-compose.yml` mounted the Postgres data volume at
+  `/var/lib/postgresql/data`, which postgres:18 moved, so `db` refuses to start;
+  a missing `POSTGRES_PASSWORD` produced a database with an empty password; and
+  the container never forwarded `INTEL_API_TOKEN`.
+
+How we fixed it:
+  (1) Added an `intel` profile to `tools/consumer/profiles.json` that vendors
+  ecosystem.json + the ledger + every ADR + every standard, and pointed
+  `sync:fusorb` at `--profile intel`. ADRs are now first-class vendored inputs,
+  parsed by `adr.ts` into Decision seeds. (2) Hardened the deploy: mounted the
+  volume at `/var/lib/postgresql`, made `POSTGRES_PASSWORD` and
+  `CLOUDFLARE_TUNNEL_TOKEN` required (`:?`), forwarded `INTEL_API_TOKEN`, wired
+  `INTEL_API_TIMEOUT_MS` into a Hono timeout middleware (uniform 504), clamped
+  `/search?limit`, added `check:fusorb` to CI as a regression gate, and pruned
+  build-only artifacts from the runtime image.
+
+What survived:
+  A profile is a contract: extend the list, and the snapshot verifies itself.
+  On the deploy side, mount paths and required secrets are correctness, not
+  cosmetics — a Postgres that starts on your laptop can still fail in the image.
+
+State: automated. `pnpm check:fusorb` gates CI; the API enforces its request
+budget and query limits; the compose stack fails fast when a required secret is
+absent.
+
+Lesson: the environment is part of the system. A graph that can't be deployed
+can't tell anyone the truth.
 
 ================================================================================

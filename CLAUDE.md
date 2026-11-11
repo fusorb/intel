@@ -13,8 +13,9 @@ This repo is **Tier-1 infra**. It is not a product that ships to end users.
 - **Graph**: Prisma schema (`schemas/graph.prisma`) — six entity types (Repository, Package,
   Module, Symbol, Document, Decision) + a polymorphic Relationship join table with
   `CONTAINS`, `CONSUMES`, `DEPENDS_ON`, `RENAMED_FROM`, `DOCUMENTS`, `EXPORTS`, `DEFINES`,
-  `REFERENCES`, `GOVERNS`, and `VIOLATES` edge kinds. `DependencyType` enum (`PRODUCTION`,
-  `DEVELOPMENT`) for dependency edges. `IngestionRun` model tracks per-repo ingestion
+  `REFERENCES`, `GOVERNS`, and `VIOLATES` edge kinds. `DependencyType` enum
+  (`dependency`/`dev`/`peer`/`optional`) for dependency edges. `IngestionRun` model tracks
+  per-repo ingestion
   counts and status. Provenance on every row. `Decision` entities hold architectural
   rules/invariants and are derived from the architecture repo's vendored ADRs
   (`vendor/fusorb/decisions/*.md`, parsed by `adr.ts`) plus a small hand-authored

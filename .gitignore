@@ -79,4 +79,4 @@ Thumbs.db
 # Agent/user scratch and run artifacts
 /scratchpad/
 /test-output.txt
-vitest.config.ts.timestamp-*
+vitest*.timestamp-*

@@ -455,6 +455,13 @@ against `@fusorb/intel-tools`, feeds results back, and stops at `maxSteps` (defa
 `/ask/agent`, `/search`, `/symbols`, `/symbols/:id/{callers,references}`, `/decisions`,
 `/violations`) are documented in `README.md`; the handlers live in `apps/api/src/server.ts`.
 
+### Operational limits
+
+`GET /search?limit` is clamped to `[1, 100]` (default 20). Every authenticated request is bounded
+by `INTEL_API_TIMEOUT_MS` (default 120000) and returns a uniform `504 { "error": "timeout" }` when
+it exceeds the budget. The server refuses to start in token mode without `INTEL_API_TOKEN`, and
+refuses `INTEL_API_AUTH=none` in production.
+
 ### `GET /decisions`
 
 Returns `{ decisions: RetrievedEntity[] }` — every decision that is **not retired**

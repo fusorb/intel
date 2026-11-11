@@ -58,9 +58,13 @@ fusorb/intel
 │   └── agent/                 # Agentic multi-step tool-calling loop (runAgent)
 ├── apps/
 │   └── api/                   # Internal read-only HTTP service (Hono) → intel.fusorb.com
+├── tools/consumer/            # Vendored snapshot sync/check (sync-fusorb.mjs + profiles.json)
+├── vendor/fusorb/             # Vendored architecture-repo snapshot (ADRs, standards, PROVENANCE.json)
 ├── tests/                     # Cross-package acceptance suite + shared setup
+├── scripts/seed-governance.ts # `pnpm seed:governance`
 ├── scripts/verify.ts          # Throwaway validation script (3 acceptance facts)
 ├── scripts/ask.ts             # Question-answering CLI entry point
+├── .github/workflows/         # ci · sync · image · anthropic-wif-test
 ├── CLAUDE.md                  # Agent-facing instructions
 ├── AGENTS.md                  # This file
 └── .agent/                    # Gitignored scratch (repo clones, outputs, logs)
@@ -92,8 +96,9 @@ pnpm prisma:push
 
 ## Continuous integration
 
-- `.github/workflows/ci.yml` — typecheck + build + unit tests on push/PR. No database, so DB-backed tests self-skip.
+- `.github/workflows/ci.yml` — `check:fusorb` + typecheck + build + unit tests on push/PR. No database, so DB-backed tests self-skip.
 - `.github/workflows/sync.yml` — nightly (and on demand): throws away a Postgres, runs `prisma db push` + `ingest:all` + `seed:governance` + `verify` + the full suite. Fails when a product repo drifts.
+- `.github/workflows/image.yml` — on push to `main`: builds the `Dockerfile` and pushes `ghcr.io/fusorb/intel/intel-api`.
 
 ## Conventions to follow
 
@@ -109,10 +114,11 @@ pnpm prisma:push
   Module, Symbol, Document, Decision). Don't add more unless the verification step proves
   they're needed.
 - **The answering layer is implemented** — `packages/retrieval`, `packages/provider`,
-  `packages/tools`, and `packages/agent` are all present. The agentic multi-step tool-calling
-  loop runs via `pnpm ask --agent`, with `find_symbol`, `find_callers`, and `find_references`
-  backed by REFERENCES call-graph edges extracted at ingest time. Still deferred:
-  embedding/hybrid retrieval, `apps/api`, and any UI.
+  `packages/tools`, and `packages/agent` are all present, and `apps/api` is the internal
+  read-only HTTP service over them. The agentic multi-step tool-calling loop runs via
+  `pnpm ask --agent`, with `find_symbol`, `find_callers`, and `find_references` backed by
+  REFERENCES call-graph edges extracted at ingest time. Still deferred: embedding/hybrid
+  retrieval and any web UI.
 
 ## Common tasks
 

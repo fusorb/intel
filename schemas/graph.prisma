@@ -159,7 +159,8 @@ model Symbol {
    evidenceLevel   EvidenceLevel @default(verified) // AST extraction reads directly
                                                       // from the repository source file
 
-   @@unique([repositoryId, path, name])
+  @@unique([repositoryId, path, name])
+  @@index([name]) // "find this symbol name across every repo" is a core query (find_symbol)
 }
 
 model Document {

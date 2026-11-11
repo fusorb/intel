@@ -150,34 +150,36 @@ fusorb/intel/
 │   └── graph.prisma              # Canonical Prisma schema (committed, source of truth)
 ├── packages/
 │   ├── evidence/                 # EvidenceLevel enum + provenance helpers (zero deps)
-│   │   └── src/index.ts
 │   ├── graph/                    # PrismaClient singleton + re-exports
-│   │   └── src/index.ts
-│   └── ingest/                   # Git clone, file-tree walk, entity extraction, CLI
-│       └── src/
-│           ├── cli.ts            # CLI entry: `pnpm ingest <url> [--branch <branch>]`
-│           ├── extract.ts        # File-tree walker + entity parser
-│           ├── graph.ts          # DB upsert layer (provenance on every write)
-│           ├── git.ts            # git CLI wrappers (cloneOrFetch, currentCommit, etc.)
-│           ├── ingest.ts         # Orchestration: clone → extract → persist → link
-│           ├── index.ts          # Public re-exports
-│           ├── parser.ts         # TS/TSX symbol extraction (TypeScript compiler API, wired into ingestion)
-│           └── types.ts          # Extracted entity interfaces
-│   ├── provider/                 # IntelligenceProvider interface + Anthropic implementation
-│   │   └── src/index.ts
-│   ├── retrieval/                # Keyword search, graph traversal, context formatting
-│   │   └── src/index.ts
-│   └── tools/                    # Read-only tool surface (searchRepo, readDocument, inspectDependencies)
-│       └── src/index.ts
-├── prisma.config.ts              # Prisma 7 config (schema path, datasource URL)
+│   ├── ingest/                   # Git clone, file-tree walk, entity/symbol extraction, CLI, governance
+│   │   └── src/
+│   │       ├── adr.ts            # Parses vendored ADRs (vendor/fusorb/decisions) into Decision seeds
+│   │       ├── cli.ts            # CLI entry: `pnpm ingest <url> [--branch <branch>]`
+│   │       ├── decisions.ts      # Decision seeds: ADR-derived + standard-backed (STANDARD_DECISIONS)
+│   │       ├── extract.ts        # File-tree walker + entity parser
+│   │       ├── governance.ts     # runGovernance(): seed decisions, write GOVERNS/VIOLATES
+│   │       ├── graph.ts          # DB upsert layer (provenance on every write)
+│   │       ├── git.ts            # git CLI wrappers (cloneOrFetch, currentCommit, ...)
+│   │       ├── ingest.ts         # Orchestration: clone → extract → persist → link
+│   │       ├── parser.ts         # TS/TSX symbol + call-reference extraction (TypeScript compiler API)
+│   │       └── types.ts          # Extracted entity interfaces
+│   ├── provider/                 # IntelligenceProvider + mock/anthropic/ollama/openrouter/openai
+│   ├── retrieval/                # Keyword search, graph traversal, symbol lookup, context formatting
+│   ├── tools/                    # Read-only tool surface + registry (searchRepo, findSymbol, ...)
+│   └── agent/                    # Agentic multi-step tool-calling loop (runAgent)
+├── apps/
+│   └── api/                      # Internal read-only HTTP service (Hono) → intel.fusorb.com
+├── tools/consumer/               # Vendored snapshot sync/check (sync-fusorb.mjs + profiles.json)
+├── vendor/fusorb/                # Vendored architecture-repo snapshot (ADRs, standards, PROVENANCE.json)
+├── tests/                        # Cross-package acceptance suite + shared setup
 ├── scripts/
 │   ├── postinstall.cjs           # Runs `prisma generate` on install
+│   ├── seed-governance.ts        # `pnpm seed:governance`
 │   ├── verify.ts                 # Throwaway script: asserts 3 acceptance facts from real data
 │   └── ask.ts                    # Question-answering CLI: `pnpm ask "<question>"`
-├── tsconfig.base.json            # Shared TypeScript strict config
-├── tsconfig.json                 # Root project references
-├── pnpm-workspace.yaml           # pnpm workspaces config
-├── .env                          # Local environment (gitignored)
+├── .github/workflows/            # ci · sync · image · anthropic-wif-test
+├── Dockerfile · docker-compose.yml
+├── tsconfig.base.json · tsconfig.json · pnpm-workspace.yaml
 └── .agent/                       # Gitignored scratch (repo clones, outputs, logs)
 ```
 
@@ -188,9 +190,10 @@ fusorb/intel/
 | `@fusorb/intel-evidence` | The `EvidenceLevel` enum and provenance type/helpers. Zero runtime dependencies. Imported by `graph` and re-exported, so any consumer can `import { EvidenceLevel } from "@fusorb/intel-graph"`. |
 | `@fusorb/intel-graph` | PrismaClient singleton (with `pg` Pool via `@prisma/adapter-pg`, matching the SovGrant pattern) plus re-exports of evidence vocabulary. |
 | `@fusorb/intel-ingest` | The ingestion library and CLI. Depends on `graph` and `evidence`. The TypeScript parser (`parser.ts`) is opt-in — `typescript` is an optional dependency, gracefully handled when absent. |
-| `@fusorb/intel-provider` | `IntelligenceProvider` interface + Anthropic-hosted model implementation, with citation extraction and unsourced-claim checks. |
-| `@fusorb/intel-retrieval` | Keyword search across all entity types, graph traversal (CONSUMES/dependents/CONTAINS), document reading, and `formatContext` for assembling prompt context. |
-| `@fusorb/intel-tools` | Read-only tool surface wrapping retrieval: `searchRepo`, `readDocument`, `inspectDependencies`. |
+| `@fusorb/intel-provider` | `IntelligenceProvider` interface + five implementations (`mock`, `anthropic`, `ollama`, `openrouter`, `openai`), with citation extraction and unsourced-claim checks. |
+| `@fusorb/intel-retrieval` | Keyword search across all entity types, graph traversal (CONSUMES/dependents/CONTAINS), document reading, symbol lookup, and `formatContext` for assembling prompt context. |
+| `@fusorb/intel-tools` | Read-only tool surface wrapping retrieval: `search_repo`, `read_document`, `inspect_dependencies`, `find_symbol`, `find_callers`, `find_references`. |
+| `@fusorb/intel-agent` | Multi-step tool-calling loop (`runAgent`) driving a provider + the tool registry; used via `pnpm ask --agent`. |
 
 ---
 
@@ -398,15 +401,18 @@ The chosen stack is **a VPS behind Cloudflare** — `docker-compose.yml` runs `a
 
 ### Continuous integration
 
-Two GitHub Actions workflows keep the repo honest:
+GitHub Actions workflows keep the repo honest:
 
 - **`ci`** (`.github/workflows/ci.yml`) — on every push to `main` and every PR:
-  install, `pnpm -r typecheck`, `pnpm -r build`, and the unit tests. No database is
-  provisioned, so the DB-backed tests self-skip.
+  install, `pnpm check:fusorb` (vendored-snapshot integrity), `pnpm -r typecheck`,
+  `pnpm -r build`, and the unit tests. No database is provisioned, so the DB-backed
+  tests self-skip.
 - **`sync`** (`.github/workflows/sync.yml`) — nightly and on demand: provisions
   PostgreSQL, `prisma db push`, `pnpm ingest:all`, `pnpm seed:governance`, then
   `pnpm verify` and the full suite. It fails when a product repo drifts, so the
   graph never goes quietly stale.
+- **`image`** (`.github/workflows/image.yml`) — on push to `main`: builds the
+  `Dockerfile` and pushes `ghcr.io/fusorb/intel/intel-api` (latest + commit SHA).
 
 ### Conventions
 
@@ -471,13 +477,16 @@ Because every fact carries its commit SHA and timestamp, Intel can answer questi
 
 ## Still deferred
 
-- **`apps/api`** — any API or console surface. An eventual thin `@fusorb/intel-sdk` HTTP client
-  (analogous to `facet-sdk`) is the right shape for external consumers — the internal packages give
-  direct database access and should not be published.
-- **`find_symbol`, `find_callers`, `find_references` tools** — symbol-level query tools implemented in `packages/tools` with agentic loop support.
-- **Embedding / hybrid retrieval** — retrieval is currently keyword-based; hybrid lexical + embedding
-  search is planned but not yet implemented.
-- **Agentic multi-step tool-calling loop** — available via `packages/agent` and `pnpm ask --agent`.
-- **Any UI** — no frontend is planned at this tier.
+- **External SDK** — an eventual thin `@fusorb/intel-sdk` HTTP client (analogous to `facet-sdk`)
+  is the right shape for external consumers; the internal packages give direct database access and
+  should not be published.
+- **Embedding / hybrid retrieval** — retrieval is keyword-based today; hybrid lexical + embedding
+  search is planned but not implemented.
+- **A web UI / architecture explorer** — no frontend ships at this tier; if one is built it follows
+  the ecosystem invariant and uses Facet.
+
+Everything else the project set out to do is implemented: ingestion (packages/modules/documents/
+symbols), governed decisions, retrieval, the provider layer, the read-only tool surface, the
+agentic loop (`pnpm ask --agent`), and the internal HTTP service (`apps/api`).
 
 See the [CLAUDE.md](./CLAUDE.md) for the full agent-facing developer guide.
