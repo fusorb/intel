@@ -1,10 +1,24 @@
 import { Hono } from "hono"
 import type { Context } from "hono"
+import { HTTPException } from "hono/http-exception"
+import { timeout } from "hono/timeout"
 import { RateLimiter } from "./rateLimit.js"
 import { authenticate } from "./auth.js"
 import type { ApiConfig, ApiDeps } from "./types.js"
 
 type HttpStatus = 400 | 401 | 404 | 413 | 429 | 500
+
+/** Ceiling for `GET /search?limit` so a caller can't trigger an unbounded scan. */
+const MAX_SEARCH_LIMIT = 100
+const DEFAULT_SEARCH_LIMIT = 20
+
+/** Clamp the `limit` query parameter to `[1, MAX_SEARCH_LIMIT]`, defaulting when absent or non-numeric. */
+function searchLimit(raw: string | undefined): number {
+  if (raw === undefined || raw.trim() === "") return DEFAULT_SEARCH_LIMIT
+  const n = Number(raw)
+  if (!Number.isFinite(n)) return DEFAULT_SEARCH_LIMIT
+  return Math.min(Math.max(Math.trunc(n), 1), MAX_SEARCH_LIMIT)
+}
 
 class HttpError extends Error {
   constructor(
@@ -69,6 +83,10 @@ export function createApp(deps: ApiDeps, config: ApiConfig): Hono {
     await next()
   })
 
+  // Bound every request so a slow provider or query can never pin a worker open.
+  // Exceeding the budget throws an HTTPException, surfaced as a uniform 504 below.
+  app.use("*", timeout(config.requestTimeoutMs, new HTTPException(504, { message: "timeout" })))
+
   // Health is unauthenticated so the platform can probe the origin directly.
   app.get("/health", async (c) => {
     const db = await deps.pingDatabase()
@@ -110,8 +128,8 @@ export function createApp(deps: ApiDeps, config: ApiConfig): Hono {
   app.get("/search", async (c) => {
     const q = c.req.query("q")?.trim()
     if (!q) throw new HttpError(400, "q_required")
-    const limit = Number(c.req.query("limit") ?? "20")
-    const result = await deps.searchContent(q, Number.isFinite(limit) ? limit : 20, {
+    const limit = searchLimit(c.req.query("limit"))
+    const result = await deps.searchContent(q, limit, {
       repositoryName: c.req.query("repo"),
     })
     return c.json(result)
@@ -137,6 +155,11 @@ export function createApp(deps: ApiDeps, config: ApiConfig): Hono {
 
   app.onError((err, c) => {
     if (err instanceof HttpError) return c.json({ error: err.code }, err.status)
+    // The timeout middleware throws an HTTPException; surface its status/code uniformly.
+    if (err instanceof HTTPException) {
+      const code = err.message.trim() === "" ? "http_error" : err.message
+      return c.json({ error: code }, err.status)
+    }
     // Never echo internal error detail to the client.
     return c.json({ error: "internal_error" }, 500)
   })

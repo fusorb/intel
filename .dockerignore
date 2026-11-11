@@ -1,13 +1,29 @@
+# Dependencies and build output are produced INSIDE the image, never copied in
+# (a stale local dist/ would otherwise shadow the fresh build).
 node_modules
 **/node_modules
 **/dist
+**/*.tsbuildinfo
+
+# Local scratch, clones, logs, and agent-tool config
 .agent
-.git
-.gitignore
+.commandcode
+scratchpad
+coverage
 *.log
+pnpm-debug.log
+test-output.txt
+
+# Secrets — never ship into the image
 .env
 .env.*
-coverage
-scratchpad
-test-output.txt
-pnpm-debug.log
+*.pem
+
+# Not needed at runtime; keeping them out trims the final image.
+**/test
+tests
+docs
+.github
+.vscode
+.idea
+.DS_Store

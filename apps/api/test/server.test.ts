@@ -168,6 +168,52 @@ describe("intel-api", () => {
     expect((await app.request("/search?q=facet")).status).toBe(200)
   })
 
+  it("clamps the /search limit to a sane range", async () => {
+    const seen: number[] = []
+    const app = createApp(
+      makeDeps({
+        searchContent: async (_query, limit) => {
+          seen.push(limit ?? -1)
+          return { entities: [], relationships: [], documents: [] }
+        },
+      }),
+      makeConfig(),
+    )
+    await app.request("/search?q=facet&limit=100000")
+    await app.request("/search?q=facet&limit=0")
+    await app.request("/search?q=facet&limit=abc")
+    await app.request("/search?q=facet")
+    expect(seen).toEqual([100, 1, 20, 20])
+  })
+
+  it("requires a name on /symbols", async () => {
+    const app = createApp(makeDeps(), makeConfig())
+    expect((await app.request("/symbols")).status).toBe(400)
+    expect((await app.request("/symbols?name=useAuth")).status).toBe(200)
+  })
+
+  it("rejects a missing or malformed edge identity in cloudflare-access mode", async () => {
+    const app = createApp(makeDeps(), makeConfig({ authMode: "cloudflare-access" }))
+    expect((await app.request("/decisions")).status).toBe(401)
+    expect(
+      (
+        await app.request("/decisions", {
+          headers: { "cf-access-authenticated-user-email": "not-an-email" },
+        })
+      ).status,
+    ).toBe(401)
+  })
+
+  it("returns 504 when a request exceeds the configured timeout", async () => {
+    const app = createApp(
+      makeDeps({ retrieve: () => new Promise<never>(() => {}) }),
+      makeConfig({ requestTimeoutMs: 20 }),
+    )
+    const res = await app.request("/ask", jsonPost({ question: "slow" }))
+    expect(res.status).toBe(504)
+    expect((await res.json()) as { error: string }).toEqual({ error: "timeout" })
+  })
+
   it("serves call-graph lookups", async () => {
     const app = createApp(
       makeDeps({

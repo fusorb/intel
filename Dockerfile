@@ -7,13 +7,19 @@ WORKDIR /app
 COPY . .
 RUN pnpm install --frozen-lockfile
 # The root postinstall runs `prisma generate`; keep it, the API imports the client.
-RUN pnpm --filter @fusorb/intel-api build
+# Build the API bundle, then drop build-only artifacts before they reach the
+# runtime stage. Dev dependencies stay: the out-of-band `ingest` / `prisma:migrate`
+# jobs run in this image and need tsx + the Prisma CLI. Workspace packages resolve
+# to `src/index.ts` (their `exports`), so `packages/*/dist` is never loaded at runtime.
+RUN pnpm --filter @fusorb/intel-api build \
+  && rm -rf packages/*/dist \
+  && find apps packages -name "*.tsbuildinfo" -type f -delete
 
 # --- runtime ----------------------------------------------------------------
 # The API bundles the workspace packages into apps/api/dist, so the image only
 # needs Node plus the external deps (hono, @hono/node-server, Prisma client, pg).
-# Copying the built /app (incl. node_modules + the generated Prisma client) is
-# the simplest correct layout; it can be slimmed later with `pnpm deploy`.
+# The build stage prunes build-only artifacts; the remaining /app is copied whole
+# because the in-container `ingest` / `prisma:migrate` jobs need dev tooling.
 FROM node:22-slim AS runtime
 ENV NODE_ENV=production
 # pnpm for migrations; git for in-container ingest.

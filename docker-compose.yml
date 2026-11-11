@@ -16,8 +16,11 @@ services:
     environment:
       NODE_ENV: production
       PORT: "8787"
-      DATABASE_URL: "postgresql://intel:${POSTGRES_PASSWORD}@db:5432/intel?schema=public"
+      DATABASE_URL: "postgresql://intel:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@db:5432/intel?schema=public"
       INTEL_API_AUTH: ${INTEL_API_AUTH:-cloudflare-access}
+      # Passed through so `INTEL_API_AUTH=token` works; the server refuses to
+      # start in token mode without it (see apps/api/src/index.ts).
+      INTEL_API_TOKEN: ${INTEL_API_TOKEN:-}
       INTEL_PROVIDER: ${INTEL_PROVIDER:-ollama}
       OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://ollama:11434}
       OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.2:latest}
@@ -41,10 +44,13 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: intel
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
       POSTGRES_DB: intel
     volumes:
-      - db-data:/var/lib/postgresql/data
+      # postgres:18 moved the default data dir to /var/lib/postgresql/18/docker;
+      # mounting the volume at /var/lib/postgresql (not .../data) is required, or
+      # the entrypoint treats it as the pre-18 layout and refuses to start.
+      - db-data:/var/lib/postgresql
     networks: [internal]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U intel -d intel"]
@@ -67,7 +73,7 @@ services:
     restart: unless-stopped
     command: tunnel --no-autoupdate run
     environment:
-      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN}
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN:?CLOUDFLARE_TUNNEL_TOKEN is required}
     depends_on: [api]
     networks: [internal]
 
