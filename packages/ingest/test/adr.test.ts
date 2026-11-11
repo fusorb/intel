@@ -32,6 +32,7 @@ const EXPECTED_ADR_KEYS = [
   "0006-hosting-and-domain-model",
   "0007-identity-authority",
   "0008-consumer-sync",
+  "0009-ui-architecture",
 ]
 
 describe("parseFrontmatter", () => {
@@ -230,17 +231,17 @@ describe("governs filtering against ecosystem.json", () => {
 describe("loadAdrDecisions", () => {
   const seeds = loadAdrDecisions(VENDOR)
 
-  it("loads exactly the 8 vendored ADRs, sorted by filename", () => {
-    expect(seeds).toHaveLength(8)
+  it("loads exactly the 9 vendored ADRs, sorted by filename", () => {
+    expect(seeds).toHaveLength(9)
     expect(seeds.map((s) => s.key)).toEqual(EXPECTED_ADR_KEYS)
   })
 
   it("excludes the ADR template (0000-template.md) from the seeds", () => {
-    // The vendored decisions/ dir holds 9 `.md` files: the template plus 8 ADRs.
+    // The vendored decisions/ dir holds 10 `.md` files: the template plus 9 ADRs.
     const onDisk = readdirSync(resolve(VENDOR, "decisions")).filter((n) => n.endsWith(".md"))
     expect(onDisk).toContain(ADR_TEMPLATE_FILE)
-    expect(onDisk).toHaveLength(9)
-    expect(seeds).toHaveLength(8)
+    expect(onDisk).toHaveLength(10)
+    expect(seeds).toHaveLength(9)
     expect(seeds.some((s) => s.key === "0000-template")).toBe(false)
     expect(seeds.some((s) => s.sourcePath === `decisions/${ADR_TEMPLATE_FILE}`)).toBe(false)
   })
@@ -268,7 +269,7 @@ describe("loadAdrDecisions", () => {
     }
   })
 
-  it("maps every vendored ADR to proposed (all 8 ADRs are status: Proposed)", () => {
+  it("maps every vendored ADR to proposed (all 9 ADRs are status: Proposed)", () => {
     for (const seed of seeds) {
       expect(seed.status).toBe("proposed")
     }
@@ -278,7 +279,7 @@ describe("loadAdrDecisions", () => {
     const sha = loadSourceCommitSha(VENDOR)
     // Matches the hand-authored seeds' ARCH_REPO_COMMIT so all seeds share one
     // provenance sha for the vendored tree.
-    expect(sha).toBe("634cef02")
+    expect(sha).toBe("9d44c40e")
     expect(sha).toHaveLength(8)
     for (const seed of seeds) {
       expect(seed.sourceCommitSha).toBe(sha)
@@ -324,8 +325,8 @@ describe("loadAdrDecisions", () => {
 })
 
 describe("ECOSYSTEM_DECISIONS", () => {
-  it("is the 8 ADR-derived seeds plus the 3 standard-backed seeds", () => {
-    expect(ECOSYSTEM_DECISIONS).toHaveLength(11)
+  it("is the 9 ADR-derived seeds plus the 3 standard-backed seeds", () => {
+    expect(ECOSYSTEM_DECISIONS).toHaveLength(12)
     const keys = ECOSYSTEM_DECISIONS.map((d: DecisionSeed) => d.key)
     expect(keys).toContain("retired-npm-scope")
     expect(keys).toContain("repo-structure-baseline")
@@ -354,6 +355,6 @@ describe("ECOSYSTEM_DECISIONS", () => {
   it("resolves the default vendor dir from the repo root", () => {
     const dir = defaultVendorDir()
     expect(existsSync(dir)).toBe(true)
-    expect(loadAdrDecisions()).toHaveLength(8)
+    expect(loadAdrDecisions()).toHaveLength(9)
   })
 })

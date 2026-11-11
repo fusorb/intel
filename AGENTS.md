@@ -10,7 +10,7 @@ plus a polymorphic Relationship join table. Every row carries full provenance
 The `Decision` entity captures architectural rules and invariants (e.g. "Facet is the single
 mandatory UI system across the ecosystem"). Unlike the other five, `Decision` rows are **not**
 extracted from the product repos — they are derived from the architecture repo's own ADRs,
-vendored under `vendor/fusorb/decisions/*.md` (8 ADRs, `0001`–`0008`) and parsed by
+vendored under `vendor/fusorb/decisions/*.md` (9 ADRs, `0001`–`0009`) and parsed by
 `packages/ingest/src/adr.ts`, plus a small hand-authored remainder in
 `packages/ingest/src/decisions.ts` (`STANDARD_DECISIONS`) for standards no ADR covers. They are
 written to the graph by `runGovernance()` (`pnpm seed:governance`). Their `sourceType` is

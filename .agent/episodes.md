@@ -253,3 +253,40 @@ Lesson: the environment is part of the system. A graph that can't be deployed
 can't tell anyone the truth.
 
 ================================================================================
+
+EP 11 -- The Snapshot That Was Behind
+--------------------------------------------------------------------------------
+What broke:
+  Intel's vendored architecture snapshot was pinned at fusorb `634cef02`, but the
+  fusorb repo had moved to `9d44c40e` and gained ADR `0009-ui-architecture.md`. The
+  `intel` profile in `tools/consumer/profiles.json` enumerates ADRs by hand
+  (`0000`-`0008`), so a sync could never pick up a newly-authored ADR: the gate
+  stayed green while the graph fell behind. Separately, the governance seed warned
+  about GOVERNS targets it could never resolve, conflating two different things --
+  org/layer ids the graph does not model (`fusorb`, `arcevocirqle`) and a product
+  the graph had not ingested (`intel`).
+
+How we fixed it:
+  (1) Added `decisions/0009-ui-architecture.md` to the `intel` profile and re-synced
+  from the local fusorb checkout (`sync-fusorb --from`). The snapshot now carries 9
+  ADRs and provenance `9d44c40e`; ADR 0007's statement updated. Moved
+  `ARCH_REPO_COMMIT` and the ADR test expectations to the new sha so every seed
+  shares one provenance. (2) Scoped GOVERNS to graph-addressable ids: `toGoverns`
+  now splits product ids (edges) from org/layer ids (out of scope, one info line)
+  and unknown ids (warned). The stored graph is unchanged -- diagnostics only: 11
+  warnings became 4 real ones (`intel`).
+
+What survived:
+  A profile that enumerates files is a snapshot of what we knew when we wrote it;
+  new upstream files stay invisible until someone adds them. And `governs` spans a
+  namespace wider than the graph models -- a decision's targets must be projected
+  onto what the graph can hold, never assumed.
+
+State: automated. `pnpm check:fusorb` verifies the refreshed snapshot; seeding
+converges 12 decisions (9 ADRs + 3 standards); governance warns only on in-scope
+targets that are genuinely absent.
+
+Lesson: a green gate proves a snapshot is internally consistent, not that it is
+current. Freshness needs a source to compare against.
+
+================================================================================

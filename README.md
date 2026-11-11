@@ -285,7 +285,7 @@ This throwaway script (`scripts/verify.ts`) asserts three facts from real data:
 ### Seed decisions and governance
 
 Architectural decisions are **not ingested from the product repos**. Most are derived from the
-architecture repo's own ADRs, vendored under `vendor/fusorb/decisions/*.md` (8 ADRs, `0001`–`0008`)
+architecture repo's own ADRs, vendored under `vendor/fusorb/decisions/*.md` (9 ADRs, `0001`–`0009`)
 and parsed by `packages/ingest/src/adr.ts`: the ADR filename slug is the stable `key`, the H1
 (leading `N. ` ordinal stripped) the title, the verbatim `## Decision` section the statement,
 and the frontmatter supplies `status`/`governs` (`governs` ids filtered to those present in

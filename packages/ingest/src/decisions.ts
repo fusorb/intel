@@ -20,7 +20,7 @@
  * remove its row: the old rows (and their GOVERNS edges) linger until removed out
  * of band. We deliberately do not hand-delete them.
  *
- * The vendored tree is pinned at `poetic-dev/fusorb@634cef02`
+ * The vendored tree is pinned at `poetic-dev/fusorb@9d44c40e`
  * (`vendor/fusorb/PROVENANCE.json`). Edit the ADRs upstream and re-sync, or edit
  * the standard-backed seeds below; then run `pnpm seed:governance` to converge.
  */
@@ -48,7 +48,7 @@ export interface DecisionSeed {
 }
 
 /** Short sha of the vendored architecture-repo commit (see vendor/fusorb/PROVENANCE.json). */
-const ARCH_REPO_COMMIT = "634cef02"
+const ARCH_REPO_COMMIT = "9d44c40e"
 
 const repo = (repository: string): DecisionTarget => ({ type: "REPOSITORY", repository })
 

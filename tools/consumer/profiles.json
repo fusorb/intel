@@ -36,6 +36,7 @@
         { "src": "decisions/0006-hosting-and-domain-model.md", "dst": "decisions/0006-hosting-and-domain-model.md" },
         { "src": "decisions/0007-identity-authority.md", "dst": "decisions/0007-identity-authority.md" },
         { "src": "decisions/0008-consumer-sync.md", "dst": "decisions/0008-consumer-sync.md" },
+        { "src": "decisions/0009-ui-architecture.md", "dst": "decisions/0009-ui-architecture.md" },
         { "src": "content/standards/agent-protocol.md", "dst": "content/standards/agent-protocol.md" },
         { "src": "content/standards/domains-and-deploy.md", "dst": "content/standards/domains-and-deploy.md" },
         { "src": "content/standards/facts-and-sources.md", "dst": "content/standards/facts-and-sources.md" },

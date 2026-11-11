@@ -286,12 +286,12 @@ interface ProvenanceFile {
 /**
  * Abbreviated commit length for provenance. Git's `--short` auto-scales past 7
  * hex chars on large repos; this repo already committed the 8-char abbreviation
- * "634cef02" as the hand-authored seeds' `ARCH_REPO_COMMIT`. We use the same
+ * "9d44c40e" as the hand-authored seeds' `ARCH_REPO_COMMIT`. We use the same
  * length so every seeded decision shares one provenance sha for the vendored tree.
  */
 const SHORT_SHA_LENGTH = 8
 
-/** The short source commit from `vendor/fusorb/PROVENANCE.json` (e.g. `634cef02`). */
+/** The short source commit from `vendor/fusorb/PROVENANCE.json` (e.g. `9d44c40e`). */
 export function loadSourceCommitSha(vendorDir: string): string {
   const path = resolve(vendorDir, "PROVENANCE.json")
   const parsed = JSON.parse(readFileSync(path, "utf8")) as ProvenanceFile
