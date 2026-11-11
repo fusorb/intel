@@ -2,7 +2,7 @@
 
 The knowledge graph for the Fusorb ecosystem.
 
-Intel ingests every active Fusorb product repository (Facet, SovGrant, Relnex, SovPort) into a
+Intel ingests every active Fusorb product repository (Facet, SovGrant, Relnex, SovPort, Intel) into a
 PostgreSQL graph, extracts structured entities and relationships, and tags every fact with
 provenance and an evidence level. It is **tier-1 infrastructure** — the durability layer that
 records *what is*, *where it was seen*, *how confidently*, and *when*. It is not a product that
@@ -254,7 +254,7 @@ pnpm ingest https://github.com/fusorb/sovgrant.git --branch main
 Repos are cloned to `.agent/repos/<name>/` (gitignored). Re-running fetches, resets to HEAD, and
 soft-deletes stale entities — the graph always converges to the current commit.
 
-### Ingest all four repos
+### Ingest all five repos
 
 ```bash
 pnpm ingest:all
@@ -436,7 +436,7 @@ GitHub Actions workflows keep the repo honest:
 
 ## The Fusorb ecosystem in brief
 
-Intel ingests these four product repositories:
+Intel ingests these five product repositories:
 
 | Repo | Role | Current state |
 |---|---|---|
@@ -444,6 +444,7 @@ Intel ingests these four product repositories:
 | **[sovgrant](https://github.com/fusorb/sovgrant)** | Sovereign, multi-tenant identity/access/credentials engine | Backend implemented; frontend on the published Facet packages |
 | **[relnex](https://github.com/fusorb/relnex)** | Knowledge-graph content management | Migrated to the Facet packages; development paused while SovGrant stabilizes |
 | **[sovport](https://github.com/fusorb/sovport)** | Self-sovereign identity wallet (credential holder) | Integration in progress against the SovGrant SDK |
+| **[intel](https://github.com/fusorb/intel)** | Architectural and engineering intelligence layer (this repo) | Ingested so the graph models every ecosystem product, including Intel itself |
 
 ### What Intel ingests from each
 
