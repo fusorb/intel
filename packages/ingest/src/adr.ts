@@ -230,21 +230,53 @@ export function loadEcosystemIds(vendorDir: string): Set<string> {
   return ids
 }
 
-/** Map ADR `governs` ids to DecisionTargets, dropping any id absent from `validIds`. */
+/**
+ * The ecosystem ids the graph can actually anchor an edge to — the ids of
+ * `products`. Orgs and layers are decided ecosystem facts, not graph entities:
+ * the graph models products as `Repository` rows, so only a product id can be
+ * the target of a GOVERNS edge. Non-product ids are dropped without warning.
+ *
+ * If the foundation repos (`fusorb`, `arcevocirqle` — ingested as layers) are
+ * ever added to the graph, add `parsed.layers` here and their ADRs' GOVERNS
+ * edges appear — a single, deliberate flip.
+ */
+export function loadGovernableIds(vendorDir: string): Set<string> {
+  const path = resolve(vendorDir, "ecosystem.json")
+  const parsed = JSON.parse(readFileSync(path, "utf8")) as EcosystemFile
+  const ids = new Set<string>()
+  for (const item of parsed.products ?? []) {
+    if (item && typeof item.id === "string") ids.add(item.id)
+  }
+  return ids
+}
+
+/**
+ * Project ADR `governs` ids onto graph-addressable targets, splitting three ways:
+ *
+ *  - `governs` — ids the graph models (`products`); become REPOSITORY targets.
+ *  - `notGovernable` — known ecosystem ids the graph does not model (orgs and
+ *    layers). Out of scope by design, so dropped without a warning.
+ *  - `unknown` — ids absent from ecosystem.json entirely; an editorial error
+ *    (typo, retired id) and warned about.
+ */
 export function toGoverns(
   ids: readonly string[],
   validIds: ReadonlySet<string>,
-): { governs: DecisionTarget[]; dropped: string[] } {
+  governableIds: ReadonlySet<string>,
+): { governs: DecisionTarget[]; notGovernable: string[]; unknown: string[] } {
   const governs: DecisionTarget[] = []
-  const dropped: string[] = []
+  const notGovernable: string[] = []
+  const unknown: string[] = []
   for (const id of ids) {
-    if (validIds.has(id)) {
-      governs.push({ type: "REPOSITORY", repository: id })
+    if (!validIds.has(id)) {
+      unknown.push(id)
+    } else if (!governableIds.has(id)) {
+      notGovernable.push(id)
     } else {
-      dropped.push(id)
+      governs.push({ type: "REPOSITORY", repository: id })
     }
   }
-  return { governs, dropped }
+  return { governs, notGovernable, unknown }
 }
 
 interface ProvenanceFile {
@@ -304,6 +336,7 @@ export function loadAdrDecisions(vendorDir: string = defaultVendorDir()): Decisi
   }
 
   const validIds = loadEcosystemIds(vendorDir)
+  const governableIds = loadGovernableIds(vendorDir)
   const sourceCommitSha = loadSourceCommitSha(vendorDir)
 
   const files = readdirSync(decisionsDir)
@@ -313,15 +346,25 @@ export function loadAdrDecisions(vendorDir: string = defaultVendorDir()): Decisi
     .filter((name) => name !== ADR_TEMPLATE_FILE)
     .sort()
 
-  return files.map((file) => {
+  // Ids an ADR governs that the graph does not model (org/layer ids). These are
+  // out of scope by design, so they are collected across all ADRs and reported
+  // once at info — never warned per file.
+  const outOfScope = new Set<string>()
+
+  const seeds = files.map((file) => {
     const raw = readFileSync(resolve(decisionsDir, file), "utf8")
     const { data, body } = parseFrontmatter(raw)
-    const { governs, dropped } = toGoverns(asStringArray(data.governs), validIds)
-    if (dropped.length > 0) {
+    const { governs, notGovernable, unknown } = toGoverns(
+      asStringArray(data.governs),
+      validIds,
+      governableIds,
+    )
+    if (unknown.length > 0) {
       console.warn(
-        `[adr] ${file}: dropping governs id(s) not in ecosystem.json: ${dropped.join(", ")}`,
+        `[adr] ${file}: dropping unknown governs id(s) (not in ecosystem.json): ${unknown.join(", ")}`,
       )
     }
+    for (const id of notGovernable) outOfScope.add(id)
     return {
       key: file.replace(/\.md$/, ""),
       title: extractTitle(body),
@@ -332,4 +375,13 @@ export function loadAdrDecisions(vendorDir: string = defaultVendorDir()): Decisi
       governs,
     }
   })
+
+  if (outOfScope.size > 0) {
+    console.info(
+      `[adr] governs ids outside the graph's scope (not modeled as repositories): ` +
+        [...outOfScope].sort().join(", "),
+    )
+  }
+
+  return seeds
 }

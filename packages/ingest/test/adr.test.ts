@@ -9,6 +9,7 @@ import {
   extractSection,
   mapStatus,
   loadEcosystemIds,
+  loadGovernableIds,
   toGoverns,
   loadSourceCommitSha,
   defaultVendorDir,
@@ -174,28 +175,53 @@ describe("governs filtering against ecosystem.json", () => {
     }
   })
 
-  it("keeps known ids and drops ids absent from ecosystem.json", () => {
-    const ids = loadEcosystemIds(VENDOR)
-    const { governs, dropped } = toGoverns(["facet", "scholium", "relnex"], ids)
+  it("exposes only product ids as graph-addressable", () => {
+    const ids = loadGovernableIds(VENDOR)
+    for (const id of ["facet", "sovgrant", "relnex", "sovport", "intel"]) {
+      expect(ids.has(id)).toBe(true)
+    }
+    // Orgs and layers are decided ecosystem facts, not graph entities.
+    for (const id of ["fusorb", "arcevocirqle", "poetic-dev", "ArcevoDev"]) {
+      expect(ids.has(id)).toBe(false)
+    }
+  })
+
+  it("keeps graph-addressable ids and reports ids absent from ecosystem.json", () => {
+    const valid = loadEcosystemIds(VENDOR)
+    const governable = loadGovernableIds(VENDOR)
+    const { governs, notGovernable, unknown } = toGoverns(
+      ["facet", "scholium", "relnex"],
+      valid,
+      governable,
+    )
     expect(governs).toEqual([
       { type: "REPOSITORY", repository: "facet" },
       { type: "REPOSITORY", repository: "relnex" },
     ])
-    expect(dropped).toEqual(["scholium"])
+    expect(notGovernable).toEqual([])
+    expect(unknown).toEqual(["scholium"])
   })
 
-  it("drops every ADR governs id that is not a known ecosystem id", () => {
-    const ids = loadEcosystemIds(VENDOR)
-    const { governs, dropped } = toGoverns(["not-a-real-id", "facet"], ids)
-    expect(governs.map((g) => g.repository)).toEqual(["facet"])
-    expect(dropped).toEqual(["not-a-real-id"])
+  it("separates org/layer ids (known, not governable) from unknown ids", () => {
+    const valid = loadEcosystemIds(VENDOR)
+    const governable = loadGovernableIds(VENDOR)
+    const { governs, notGovernable, unknown } = toGoverns(
+      ["fusorb", "arcevocirqle", "intel", "facet", "not-a-real-id"],
+      valid,
+      governable,
+    )
+    // Only product ids become GOVERNS targets — `intel` is a product; the two
+    // foundation layers are known ecosystem ids the graph does not model.
+    expect(governs.map((g) => g.repository)).toEqual(["intel", "facet"])
+    expect(notGovernable).toEqual(["fusorb", "arcevocirqle"])
+    expect(unknown).toEqual(["not-a-real-id"])
   })
 
-  it("resolves every real ADR governs entry within ecosystem.json", () => {
-    const ids = loadEcosystemIds(VENDOR)
+  it("governs only graph-addressable ids across every real ADR", () => {
+    const governable = loadGovernableIds(VENDOR)
     for (const seed of loadAdrDecisions(VENDOR)) {
       for (const target of seed.governs) {
-        expect(ids.has(target.repository)).toBe(true)
+        expect(governable.has(target.repository)).toBe(true)
       }
     }
   })
@@ -276,6 +302,18 @@ describe("loadAdrDecisions", () => {
     expect(ui).toBeDefined()
     expect(ui!.title).toBe("UI invariant and waiver process")
     expect(ui!.governs.map((g) => g.repository)).toContain("facet")
+  })
+
+  it("drops layer/org governs targets — 0001/0002/0004 govern only the architecture repo", () => {
+    for (const key of [
+      "0001-role-and-boundary",
+      "0002-ecosystem-json-canonical",
+      "0004-content-format",
+    ]) {
+      const seed = seeds.find((s) => s.key === key)
+      expect(seed).toBeDefined()
+      expect(seed!.governs).toEqual([])
+    }
   })
 
   it("fails loudly when the vendored ADR directory is missing", () => {

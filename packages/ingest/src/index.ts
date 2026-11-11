@@ -35,6 +35,7 @@ export {
   extractSection,
   mapStatus,
   loadEcosystemIds,
+  loadGovernableIds,
   toGoverns,
   loadSourceCommitSha,
   defaultVendorDir,
