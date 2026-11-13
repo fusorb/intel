@@ -1,6 +1,6 @@
 name: sync
 
-# Keeps the Intel graph in step with the product repos: re-ingests all four,
+# Keeps the Intel graph in step with the product repos: re-ingests all five,
 # re-seeds governance, and asserts the acceptance facts. Fails loudly when a
 # repo drifts (e.g. a name or dependency stops matching the standard), so the
 # graph never silently goes stale.
@@ -68,7 +68,7 @@ jobs:
       - name: Push schema
         run: pnpm exec prisma db push --accept-data-loss
 
-      - name: Ingest all four product repos
+      - name: Ingest all five product repos
         run: pnpm ingest:all
 
       - name: Seed decisions and governance

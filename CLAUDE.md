@@ -64,7 +64,7 @@ pnpm install
 # 3. Push schema to database
 pnpm prisma:push
 
-# 4. Ingest all four repos
+# 4. Ingest all five repos
 pnpm ingest:all
 
 # 5. Verify the three acceptance facts
@@ -123,7 +123,7 @@ pnpm seed:governance
 | `pnpm test` | Run the full test suite (unit + integration + acceptance) |
 | `pnpm -r build` | Build every package (tsup) |
 | `pnpm ingest <url> [--branch <branch>]` | Ingest a single repo |
-| `pnpm ingest:all` | Ingest all 4 repos (facet, sovgrant, relnex, sovport) |
+| `pnpm ingest:all` | Ingest all 5 repos (facet, sovgrant, relnex, sovport, intel) |
 | `pnpm ask "<question>" [--agent]` | Ask a question — single-shot, or the multi-step agent |
 | `pnpm --filter @fusorb/intel-api dev` | Run the internal read-only API (`apps/api`) |
 | `pnpm verify` | Run the throwaway verification script (3 acceptance facts) |
