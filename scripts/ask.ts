@@ -1,8 +1,8 @@
-import { retrieve, formatContext } from "@fusorb/intel-retrieval"
-import { createProvider } from "@fusorb/intel-provider"
+import { retrieve, formatContext } from "../packages/retrieval/src/index.ts"
+import { createProvider } from "../packages/provider/src/index.ts"
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs"
 import { resolve } from "node:path"
-import { runAgent } from "@fusorb/intel-agent"
+import { runAgent } from "../packages/agent/src/index.ts"
 
 const AGENT_DIR = resolve(process.cwd(), ".agent")
 const CONTEXT_FILE = resolve(AGENT_DIR, "ask-context.txt")
