@@ -1,7 +1,17 @@
 {
   "extends": "../tsconfig.base.json",
   "compilerOptions": {
-    "types": ["node"]
+    "types": ["node"],
+    "baseUrl": ".",
+    "paths": {
+      "@fusorb/intel-evidence": ["../packages/evidence/src/index.ts"],
+      "@fusorb/intel-graph": ["../packages/graph/src/index.ts"],
+      "@fusorb/intel-retrieval": ["../packages/retrieval/src/index.ts"],
+      "@fusorb/intel-provider": ["../packages/provider/src/index.ts"],
+      "@fusorb/intel-ingest": ["../packages/ingest/src/index.ts"],
+      "@fusorb/intel-tools": ["../packages/tools/src/index.ts"],
+      "@fusorb/intel-agent": ["../packages/agent/src/index.ts"]
+    }
   },
   "include": ["**/*.ts"]
 }
