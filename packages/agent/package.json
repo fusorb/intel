@@ -12,9 +12,7 @@
   },
   "dependencies": {
     "@fusorb/intel-tools": "workspace:*",
-    "@fusorb/intel-provider": "workspace:*",
-    "@fusorb/intel-retrieval": "workspace:*",
-    "@fusorb/intel-graph": "workspace:*"
+    "@fusorb/intel-provider": "workspace:*"
   },
   "devDependencies": {
     "tsup": "^8.5.1"

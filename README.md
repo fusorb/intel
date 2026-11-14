@@ -73,6 +73,11 @@ join table:
 | `GOVERNS` | Decision governs a Repository, Package, or Module |
 | `VIOLATES` | Entity currently violates a Decision |
 
+Five of these are **emitted today** — `CONTAINS`, `CONSUMES`, `REFERENCES`, `GOVERNS`,
+`VIOLATES`. The remaining five (`DEPENDS_ON`, `RENAMED_FROM`, `DOCUMENTS`, `EXPORTS`,
+`DEFINES`) are declared in the schema vocabulary but no extractor writes them yet, so the
+graph never claims an edge it does not have.
+
 ### Evidence and provenance
 
 Every fact-bearing row carries these provenance fields:
@@ -169,7 +174,7 @@ fusorb/intel/
 │   └── agent/                    # Agentic multi-step tool-calling loop (runAgent)
 ├── apps/
 │   └── api/                      # Internal read-only HTTP service (Hono) → intel.fusorb.com
-├── tools/consumer/               # Vendored snapshot sync/check (sync-fusorb.mjs + profiles.json)
+├── tools/consumer/               # Vendored snapshot sync/check (sync-fusorb.mjs + profiles.json + README.md)
 ├── vendor/fusorb/                # Vendored architecture-repo snapshot (ADRs, standards, PROVENANCE.json)
 ├── tests/                        # Cross-package acceptance suite + shared setup
 ├── scripts/
@@ -202,7 +207,7 @@ fusorb/intel/
 ### Prerequisites
 
 - **Node.js** >= 22
-- **pnpm** 12.4.0
+- **pnpm** 12.18.0
 - **PostgreSQL** 18
 
 ### Installation
@@ -214,6 +219,9 @@ pnpm install
 The `postinstall` script runs `prisma generate` to produce the typed client. It also sets
 `PRISMA_SKIP_ENGINE_DOWNLOAD=true` in-process — this project talks to PostgreSQL via the
 `@prisma/adapter-pg` driver adapter, so the Prisma query engine binary is never required.
+`prisma generate` itself never connects to a database, so when no `DATABASE_URL` is set
+(CI, Docker builds) the script supplies a placeholder for that child process only; every
+real command still requires the real value and fails loudly without it.
 
 ### Database
 
@@ -276,7 +284,8 @@ pnpm exec tsx -e 'import { prisma } from "@fusorb/intel-graph"; console.log(awai
 pnpm verify
 ```
 
-This throwaway script (`scripts/verify.ts`) asserts three facts from real data:
+This acceptance script (`scripts/verify.ts`) asserts three facts from real data, and gates
+the nightly `sync` workflow:
 
 1. SovGrant's manifests reference `@fusorb/facet-*` (not `@arcevo/facet-*`).
 2. Facet ships Package entities for `packages/motion`, `packages/native`, and `packages/sandbox`.
@@ -391,7 +400,7 @@ The chosen stack is **a VPS behind Cloudflare** — `docker-compose.yml` runs `a
 ## Development workflow
 
 1. Make your changes.
-2. `pnpm -r typecheck` — type-check every package (must pass).
+2. `pnpm typecheck` — type-check every package plus the cross-package `tests/` project (must pass).
 3. `pnpm -r build` — build every package with tsup (must pass).
 4. `pnpm test` — run the full test suite (unit + integration + acceptance).
 5. If you changed `schemas/graph.prisma`: `pnpm prisma:push` to sync the database
@@ -411,8 +420,18 @@ GitHub Actions workflows keep the repo honest:
   PostgreSQL, `prisma db push`, `pnpm ingest:all`, `pnpm seed:governance`, then
   `pnpm verify` and the full suite. It fails when a product repo drifts, so the
   graph never goes quietly stale.
-- **`image`** (`.github/workflows/image.yml`) — on push to `main`: builds the
-  `Dockerfile` and pushes `ghcr.io/fusorb/intel/intel-api` (latest + commit SHA).
+- **`image`** (`.github/workflows/image.yml`) — on push to `main` (for changes that
+  affect the service): builds the `Dockerfile` and pushes
+  `ghcr.io/fusorb/intel/intel-api` (latest + commit SHA).
+
+`pnpm check:fusorb` is the **offline** snapshot check — it proves `vendor/fusorb/`
+matches `PROVENANCE.json`, and needs nothing but this repo, so CI runs it. It cannot
+see a change in `poetic-dev/fusorb` itself. The **freshness** check
+(`pnpm check:freshness`, needs `FUSORB_DIR` pointing at a fusorb clone) additionally
+fails on commit drift, on a profiled source file that is not vendored (a new ADR), or
+on a vendored file with no source. Run it before a sync and after any upstream change;
+it is deliberately not wired into CI, because whether a runner can reach the
+architecture repo is a deployment decision.
 
 ### Conventions
 

@@ -279,7 +279,7 @@ describe("loadAdrDecisions", () => {
     const sha = loadSourceCommitSha(VENDOR)
     // Matches the hand-authored seeds' ARCH_REPO_COMMIT so all seeds share one
     // provenance sha for the vendored tree.
-    expect(sha).toBe("9d44c40e")
+    expect(sha).toBe("dfbc9aea")
     expect(sha).toHaveLength(8)
     for (const seed of seeds) {
       expect(seed.sourceCommitSha).toBe(sha)

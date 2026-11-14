@@ -37,7 +37,7 @@ jobs:
         run: pnpm check:fusorb
 
       - name: Typecheck
-        run: pnpm -r typecheck
+        run: pnpm typecheck
 
       - name: Build
         run: pnpm -r build

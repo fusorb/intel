@@ -36,6 +36,7 @@ interface RunCounts {
   symbols: number
   consumesEdges: number
   containsEdges: number
+  referencesEdges: number
   symbolFilesParsed: number
   symbolFilesSkipped: number
   symbolFilesErrored: number
@@ -49,6 +50,7 @@ const EMPTY_RUN_COUNTS: RunCounts = {
   symbols: 0,
   consumesEdges: 0,
   containsEdges: 0,
+  referencesEdges: 0,
   symbolFilesParsed: 0,
   symbolFilesSkipped: 0,
   symbolFilesErrored: 0,
@@ -237,6 +239,7 @@ export async function ingestRepo(
         symbols: symbolsCount,
         consumesEdges,
         containsEdges,
+        referencesEdges,
         symbolFilesParsed,
         symbolFilesSkipped,
         symbolFilesErrored,
@@ -274,6 +277,7 @@ export async function ingestRepo(
           symbols: symbolsCount,
           consumesEdges,
           containsEdges,
+          referencesEdges,
           symbolFilesParsed,
           symbolFilesSkipped,
           symbolFilesErrored,

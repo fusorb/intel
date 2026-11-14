@@ -1,6 +1,6 @@
 {
-  "sourceCommit": "9d44c40e7a0dfd7f95209f5f49a4ad0312e0fe58",
-  "syncedAt": "2026-11-11T22:25:12.778Z",
+  "sourceCommit": "dfbc9aeac61e711b211e132bd62cc45be26a0d30",
+  "syncedAt": "2026-11-13T19:08:31.166Z",
   "files": [
     {
       "path": "ecosystem.json",
@@ -44,7 +44,7 @@
     },
     {
       "path": "decisions/0008-consumer-sync.md",
-      "sha256": "380cf5004d028298bbcedbddc10e9b5f209ee0f25c06139ef0039c3336084724"
+      "sha256": "bcd00076193c1ccc960ee69d6b51f5709c1dc909cb3f42002fbdb9f0d5f1a0a9"
     },
     {
       "path": "decisions/0009-ui-architecture.md",
@@ -68,7 +68,7 @@
     },
     {
       "path": "content/standards/repo-structure.md",
-      "sha256": "c48aeb8d8e0912acb8293d22814af0311cd29d90acb5cc650694e73147727415"
+      "sha256": "8c5e5bf199361de86ca8f231e217ecfd4442e2b31769dae8369e292905fa8eca"
     },
     {
       "path": "content/standards/ui-invariant.md",
@@ -83,20 +83,20 @@
       "sha256": "324f0425215ced17621009ecf37ca9baba7916520e3aa16d5b2b4ec20dc274ce"
     },
     {
-      "path": "tools/lib/fs-walk.mjs",
-      "sha256": "66305827d54377230a053ca3cd2139186636373ab94c3f6ce7587e58c28ef2c1"
-    },
-    {
-      "path": "tools/lib/glob.mjs",
-      "sha256": "f8c8282a71a41238c87b2cd0e13c1bc4ebdf9a72f307de05170786fcba2732f1"
+      "path": "tools/lib/derived-facts.mjs",
+      "sha256": "25a829fea2c7cc2ce4915d517ddf95dc666682598715d0eef4c5f7f22e56122c"
     },
     {
       "path": "tools/lib/frontmatter.mjs",
       "sha256": "ebd89720adc02522d3e8925a7db643a23cb42f4fe5099e62248947a0e08df7ca"
     },
     {
-      "path": "tools/lib/derived-facts.mjs",
-      "sha256": "25a829fea2c7cc2ce4915d517ddf95dc666682598715d0eef4c5f7f22e56122c"
+      "path": "tools/lib/fs-walk.mjs",
+      "sha256": "66305827d54377230a053ca3cd2139186636373ab94c3f6ce7587e58c28ef2c1"
+    },
+    {
+      "path": "tools/lib/glob.mjs",
+      "sha256": "f8c8282a71a41238c87b2cd0e13c1bc4ebdf9a72f307de05170786fcba2732f1"
     },
     {
       "path": "tools/lib/links.mjs",

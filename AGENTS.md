@@ -58,11 +58,11 @@ fusorb/intel
 │   └── agent/                 # Agentic multi-step tool-calling loop (runAgent)
 ├── apps/
 │   └── api/                   # Internal read-only HTTP service (Hono) → intel.fusorb.com
-├── tools/consumer/            # Vendored snapshot sync/check (sync-fusorb.mjs + profiles.json)
+├── tools/consumer/            # Vendored snapshot sync/check (sync-fusorb.mjs + profiles.json + README.md)
 ├── vendor/fusorb/             # Vendored architecture-repo snapshot (ADRs, standards, PROVENANCE.json)
 ├── tests/                     # Cross-package acceptance suite + shared setup
 ├── scripts/seed-governance.ts # `pnpm seed:governance`
-├── scripts/verify.ts          # Throwaway validation script (3 acceptance facts)
+├── scripts/verify.ts          # Acceptance script (3 acceptance facts); gates the nightly sync job
 ├── scripts/ask.ts             # Question-answering CLI entry point
 ├── .github/workflows/         # ci · sync · image · anthropic-wif-test
 ├── CLAUDE.md                  # Agent-facing instructions
@@ -87,18 +87,20 @@ pnpm prisma:push
 ## Daily workflow
 
 1. Make your changes.
-2. `pnpm -r typecheck` — must pass before commit.
+2. `pnpm typecheck` — type-checks every package **and** `tests/`; must pass before commit.
 3. `pnpm test` — run the full test suite (unit + integration + acceptance).
 4. `pnpm -r build` — must pass (tsup builds each package).
 5. If you changed `schemas/graph.prisma`: `pnpm prisma:push` (or `pnpm prisma:generate` if only types changed).
 6. Re-ingest repos after code changes: `pnpm ingest:all`.
 7. Re-seed decisions and governance after ingest or seed changes: `pnpm seed:governance`.
+8. If the architecture repo moved: `pnpm check:freshness` (needs `FUSORB_DIR`), then
+   `pnpm sync:fusorb --from <fusorb>` — see "Re-sync the vendored snapshot" below.
 
 ## Continuous integration
 
-- `.github/workflows/ci.yml` — `check:fusorb` + typecheck + build + unit tests on push/PR. No database, so DB-backed tests self-skip.
-- `.github/workflows/sync.yml` — nightly (and on demand): throws away a Postgres, runs `prisma db push` + `ingest:all` + `seed:governance` + `verify` + the full suite. Fails when a product repo drifts.
-- `.github/workflows/image.yml` — on push to `main`: builds the `Dockerfile` and pushes `ghcr.io/fusorb/intel/intel-api`.
+- `.github/workflows/ci.yml` — `check:fusorb` + typecheck + build + unit tests on push/PR. No database, so DB-backed tests self-skip. `check:fusorb` is the *offline* snapshot check: it proves `vendor/fusorb/` matches `PROVENANCE.json` and needs nothing but this repo.
+- `.github/workflows/sync.yml` — nightly (and on demand): provisions a disposable Postgres, runs `prisma db push` + `ingest:all` + `seed:governance` + `verify` + the full suite. Fails when a **product** repo drifts; it does not see architecture-repo drift (that is `check:freshness`, which needs a fusorb clone).
+- `.github/workflows/image.yml` — on push to `main` (paths that affect the service): builds the `Dockerfile` and pushes `ghcr.io/fusorb/intel/intel-api`.
 
 ## Conventions to follow
 
@@ -152,6 +154,29 @@ the seed (deleting its relationships first), writes a `GOVERNS` edge to every
 Repository/Package/Module it governs, then detects `VIOLATES` edges (retired `@arcevo/*` scope,
 shadcn-style UI deps, missing `AGENTS.md`/`CLAUDE.md`). It is idempotent and clears violations
 that no longer hold — re-run it after `pnpm ingest:all`.
+
+### Re-sync the vendored snapshot
+
+`vendor/fusorb/` is a snapshot of `poetic-dev/fusorb` pinned in
+`vendor/fusorb/PROVENANCE.json`. The pinned commit is what `decisions.ts`/`adr.ts` stamp onto
+seeded Decisions, so a stale snapshot means stale decision provenance. The tool lives in
+`tools/consumer/` (see its `README.md`).
+
+```bash
+# 1. Is the snapshot current? (freshness needs a fusorb clone)
+set FUSORB_DIR=C:\Users\HP\Desktop\poetic-dev\fusorb     # or export, or --from <path>
+pnpm check:freshness
+
+# 2. Re-vendor from the pushed commit, then re-check and re-seed
+pnpm sync:fusorb --from "C:\Users\HP\Desktop\poetic-dev\fusorb"
+pnpm check:fusorb
+pnpm seed:governance
+```
+
+Profiles select what is vendored; the `intel` profile uses directory entries (`decisions/`,
+`content/standards/`, `scripts/lib/`), so a new ADR or standard is picked up without editing
+`profiles.json`. A new ADR changes the decision set, which the assertions in
+`packages/ingest/test/adr.test.ts` pin deliberately — expect to update them when one lands.
 
 ### Query the graph manually
 

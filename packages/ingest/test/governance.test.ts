@@ -140,4 +140,47 @@ describe("runGovernance", () => {
       expect(["REPOSITORY", "PACKAGE", "MODULE"]).toContain(v.fromEntityType)
     }
   })
+
+  it("clears a violation that no longer holds", async () => {
+    if (!hasDb) return
+
+    await runGovernance()
+
+    // `agent-protocol` has no detector, so an edge pointing at it can never be
+    // re-derived: anything active after a run is a violation that survived the
+    // clear pass in detectViolations().
+    const repo = await prisma.repository.findFirst({
+      where: { removedAt: null, name: { not: "npm" } },
+      select: { id: true },
+    })
+    const decision = await prisma.decision.findUnique({
+      where: { key: "agent-protocol" },
+      select: { id: true },
+    })
+    expect(repo).not.toBeNull()
+    expect(decision).not.toBeNull()
+
+    const key = {
+      fromEntityId: repo!.id,
+      toEntityId: decision!.id,
+      fromEntityType: "REPOSITORY" as const,
+      toEntityType: "DECISION" as const,
+      kind: "VIOLATES" as const,
+    }
+    const seeded = await prisma.relationship.upsert({
+      where: { fromEntityId_toEntityId_fromEntityType_toEntityType_kind: key },
+      create: { ...key, sourcePath: "test", note: "synthetic violation" },
+      update: { sourcePath: "test", note: "synthetic violation", removedAt: null },
+    })
+    expect(seeded.removedAt).toBeNull()
+
+    await runGovernance()
+
+    const after = await prisma.relationship.findUnique({ where: { id: seeded.id } })
+    expect(after?.removedAt).not.toBeNull()
+    const active = await prisma.relationship.count({
+      where: { ...key, removedAt: null },
+    })
+    expect(active).toBe(0)
+  })
 })

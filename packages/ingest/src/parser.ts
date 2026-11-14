@@ -411,9 +411,10 @@ export async function parseFile(filePath: string, source: string): Promise<Parse
  * The symbol is keyed on `[repositoryId, path, name]` where `path` is
  * `"<filePath>:<line>"` — matching the schema's `@@unique([repositoryId, path, name])`.
  *
- * Relationship wiring (DEFINES / EXPORTS / REFERENCES / DEPENDS_ON) is
- * deferred to a future pass.  This function only creates Symbol rows so
- * ingestion can be convergent (re-running overwrites same-name symbols).
+ * Symbol rows are the convergent core of this function, and REFERENCES edges are
+ * written on a best-effort basis by resolving each referenced name to a symbol in
+ * the same repository. The other wiring edges (DEFINES / EXPORTS / DEPENDS_ON)
+ * are still unimplemented and are never written.
  *
  * @param repositoryId — database ID of the Repository that owns this file
  * @param filePath     — sourcePath for provenance

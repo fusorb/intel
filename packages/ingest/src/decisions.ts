@@ -16,11 +16,11 @@
  *   - `ui-invariant-facet`  -> ADR `0005-ui-invariant`
  *   - `naming-ledger`       -> ADR `0003-naming-ledger`
  *   - `identity-authority`  -> ADR `0007-identity-authority`
- * Seeding is upsert-by-key and never deletes, so removing a key here does not
- * remove its row: the old rows (and their GOVERNS edges) linger until removed out
- * of band. We deliberately do not hand-delete them.
+ * Seeding is upsert-by-key; `runGovernance()` then prunes any Decision whose key
+ * is no longer in this seed (removing its edges first), so retiring a key here is
+ * enough and the stored set converges to `ECOSYSTEM_DECISIONS`.
  *
- * The vendored tree is pinned at `poetic-dev/fusorb@9d44c40e`
+ * The vendored tree is pinned at `poetic-dev/fusorb@dfbc9ae`
  * (`vendor/fusorb/PROVENANCE.json`). Edit the ADRs upstream and re-sync, or edit
  * the standard-backed seeds below; then run `pnpm seed:governance` to converge.
  */
@@ -48,7 +48,7 @@ export interface DecisionSeed {
 }
 
 /** Short sha of the vendored architecture-repo commit (see vendor/fusorb/PROVENANCE.json). */
-const ARCH_REPO_COMMIT = "9d44c40e"
+const ARCH_REPO_COMMIT = "dfbc9aea"
 
 const repo = (repository: string): DecisionTarget => ({ type: "REPOSITORY", repository })
 

@@ -9,6 +9,7 @@ try {
     const trimmed = line.trim()
     if (trimmed.startsWith("#") || !trimmed.includes("=")) continue
     const [key, ...parts] = trimmed.split("=")
+    if (!key) continue
     const value = parts.join("=").trim().replace(/^["']|["']$/g, "")
     if (process.env[key] === undefined) {
       process.env[key] = value

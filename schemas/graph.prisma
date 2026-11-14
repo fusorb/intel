@@ -225,8 +225,9 @@ model IngestionRun {
   symbolFilesParsed  Int       @default(0) // .ts/.tsx files successfully parsed
   symbolFilesSkipped Int       @default(0) // files beyond size cap or unsupported
   symbolFilesErrored Int       @default(0) // files with parse errors
-  consumesEdges      Int       @default(0)
-  containsEdges      Int       @default(0)
+  consumesEdges      Int      @default(0)
+  containsEdges      Int      @default(0)
+  referencesEdges    Int      @default(0) // Symbol->Symbol REFERENCES call-graph edges
   errorsJson         String?   // JSON array of hard error strings (failures)
   warningsJson       String?   // JSON array of diagnostic strings (skips, parse errors)
 

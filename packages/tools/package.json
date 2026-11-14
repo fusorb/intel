@@ -11,8 +11,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@fusorb/intel-retrieval": "workspace:*",
-    "@fusorb/intel-graph": "workspace:*"
+    "@fusorb/intel-retrieval": "workspace:*"
   },
   "devDependencies": {
     "tsup": "^8.5.1"

@@ -13,6 +13,8 @@ on:
       - "pnpm-lock.yaml"
       - "pnpm-workspace.yaml"
       - "tsconfig.base.json"
+      - "prisma.config.ts"
+      - "scripts/postinstall.cjs"
       - ".github/workflows/image.yml"
   workflow_dispatch:
 

@@ -13,7 +13,9 @@ This repo is **Tier-1 infra**. It is not a product that ships to end users.
 - **Graph**: Prisma schema (`schemas/graph.prisma`) — six entity types (Repository, Package,
   Module, Symbol, Document, Decision) + a polymorphic Relationship join table with
   `CONTAINS`, `CONSUMES`, `DEPENDS_ON`, `RENAMED_FROM`, `DOCUMENTS`, `EXPORTS`, `DEFINES`,
-  `REFERENCES`, `GOVERNS`, and `VIOLATES` edge kinds. `DependencyType` enum
+  `REFERENCES`, `GOVERNS`, and `VIOLATES` edge kinds — of which `CONTAINS`, `CONSUMES`,
+  `REFERENCES`, `GOVERNS`, and `VIOLATES` are emitted today; the rest are declared
+  vocabulary with no extractor yet. `DependencyType` enum
   (`dependency`/`dev`/`peer`/`optional`) for dependency edges. `IngestionRun` model tracks
   per-repo ingestion
   counts and status. Provenance on every row. `Decision` entities hold architectural
@@ -118,13 +120,15 @@ pnpm seed:governance
 | `pnpm prisma:push` | Push schema to local Postgres (`intel` DB) |
 | `pnpm prisma:migrate` | Apply migrations to a database (`prisma migrate deploy`) |
 | `pnpm prisma:generate` | Regenerate Prisma client from schema |
-| `pnpm typecheck` | Type-check root (project references) |
-| `pnpm -r typecheck` | Type-check every package |
+| `pnpm typecheck` | Type-check every package, then the cross-package `tests/` project |
+| `pnpm typecheck:tests` | Type-check just `tests/` |
 | `pnpm test` | Run the full test suite (unit + integration + acceptance) |
 | `pnpm -r build` | Build every package (tsup) |
+| `pnpm check:fusorb` | Offline: verify `vendor/fusorb/` against `PROVENANCE.json` (CI-safe) |
+| `pnpm check:freshness` | Verify the snapshot is current against a fusorb clone in `FUSORB_DIR` |
 | `pnpm ingest <url> [--branch <branch>]` | Ingest a single repo |
 | `pnpm ingest:all` | Ingest all 5 repos (facet, sovgrant, relnex, sovport, intel) |
 | `pnpm ask "<question>" [--agent]` | Ask a question — single-shot, or the multi-step agent |
 | `pnpm --filter @fusorb/intel-api dev` | Run the internal read-only API (`apps/api`) |
-| `pnpm verify` | Run the throwaway verification script (3 acceptance facts) |
+| `pnpm verify` | Run the acceptance script (3 acceptance facts, gates the nightly `sync` job) |
 | `pnpm seed:governance` | Seed ADR-derived decisions and (re)compute GOVERNS/VIOLATES edges |

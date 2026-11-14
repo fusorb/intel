@@ -10,7 +10,8 @@
     "pnpm": ">=9"
   },
   "scripts": {
-    "typecheck": "pnpm -r typecheck",
+    "typecheck": "pnpm -r typecheck && pnpm typecheck:tests",
+    "typecheck:tests": "tsc --noEmit -p tests/tsconfig.json",
     "typecheck:output": "pnpm typecheck > .agent/typecheck-output.txt 2>&1",
     "build": "pnpm -r build",
     "prisma:generate": "prisma generate",
@@ -18,6 +19,7 @@
     "prisma:migrate": "prisma migrate deploy",
     "sync:fusorb": "node tools/consumer/sync-fusorb.mjs --profile intel",
     "check:fusorb": "node tools/consumer/sync-fusorb.mjs --check --profile intel",
+    "check:freshness": "node tools/consumer/sync-fusorb.mjs --check --profile intel --from-env FUSORB_DIR",
     "prisma:studio": "prisma studio",
     "ingest": "tsx --env-file=.env packages/ingest/src/cli.ts",
     "ingest:all": "pnpm ingest https://github.com/fusorb/facet.git && pnpm ingest https://github.com/fusorb/sovgrant.git && pnpm ingest https://github.com/fusorb/relnex.git && pnpm ingest https://github.com/fusorb/sovport.git && pnpm ingest https://github.com/fusorb/intel.git",

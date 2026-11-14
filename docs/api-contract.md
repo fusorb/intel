@@ -61,7 +61,8 @@ export * from "@fusorb/intel-evidence"
 `Relationship` join table (`fromEntityId`/`toEntityId` + `fromEntityType`/`toEntityType`,
 `kind`, `note`, `depType`). Every row carries provenance. `RelationshipKind`:
 `CONTAINS`, `CONSUMES`, `DEPENDS_ON`, `RENAMED_FROM`, `DOCUMENTS`, `EXPORTS`, `DEFINES`,
-`REFERENCES`, `GOVERNS`, `VIOLATES`.
+`REFERENCES`, `GOVERNS`, `VIOLATES`. Only `CONTAINS`, `CONSUMES`, `REFERENCES`, `GOVERNS`,
+and `VIOLATES` are written by any extractor today; the others are declared vocabulary.
 
 ---
 
@@ -142,7 +143,7 @@ function startIngestionRun(repositoryId: string, commitSha: string, branch: stri
 function completeIngestionRun(runId: string, status: "success" | "failed",
   counts: {
     packages: number; modules: number; documents: number; symbols: number
-    consumesEdges: number; containsEdges: number
+    consumesEdges: number; containsEdges: number; referencesEdges: number
     symbolFilesParsed: number; symbolFilesSkipped: number; symbolFilesErrored: number
   },
   errors?: string[], warnings?: string[]): Promise<void>
@@ -186,8 +187,8 @@ interface DecisionTarget { type: "REPOSITORY" | "PACKAGE"; repository: string; p
 ### Extraction & parser
 
 ```ts
-function extractRepo(repoRoot: string): ExtractedRepo      // internal (not in the barrel)
-function collectSourceFiles(repoRoot: string): ScannedFile[]  // internal
+function extractRepo(repoRoot: string): ExtractedRepo      // exported from the barrel
+function collectSourceFiles(repoRoot: string): ScannedFile[]  // exported from the barrel
 
 const MAX_SYMBOL_FILES = 300
 const MAX_SYMBOL_FILE_SIZE = 200_000
@@ -294,8 +295,8 @@ interface IntelligenceProvider {
 const CITATION_REGEX: RegExp
 const DONT_KNOW_PATTERNS: RegExp[]
 function extractCitations(text: string): Citation[]
-function extractSourcePathsFromContext(context: string): string[]
-function checkUnsourcedClaims(text: string, citations: Citation[]): string[]
+function extractSourcePathsFromContext(context: string): Set<string>
+function checkUnsourcedClaims(text: string, citations: Citation[], context: string): string[]
 function finalizeAnswer(text: string, context: string): Answer
 
 // Prompt

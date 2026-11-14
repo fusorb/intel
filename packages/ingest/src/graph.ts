@@ -568,6 +568,7 @@ export async function completeIngestionRun(
     symbols: number
     consumesEdges: number
     containsEdges: number
+    referencesEdges: number
     symbolFilesParsed: number
     symbolFilesSkipped: number
     symbolFilesErrored: number
@@ -587,6 +588,7 @@ export async function completeIngestionRun(
       symbolsCount: counts.symbols,
       consumesEdges: counts.consumesEdges,
       containsEdges: counts.containsEdges,
+      referencesEdges: counts.referencesEdges,
       symbolFilesParsed: counts.symbolFilesParsed,
       symbolFilesSkipped: counts.symbolFilesSkipped,
       symbolFilesErrored: counts.symbolFilesErrored,

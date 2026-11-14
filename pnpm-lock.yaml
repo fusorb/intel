@@ -227,15 +227,9 @@ importers:
 
   packages/agent:
     dependencies:
-      '@fusorb/intel-graph':
-        specifier: workspace:*
-        version: link:../graph
       '@fusorb/intel-provider':
         specifier: workspace:*
         version: link:../provider
-      '@fusorb/intel-retrieval':
-        specifier: workspace:*
-        version: link:../retrieval
       '@fusorb/intel-tools':
         specifier: workspace:*
         version: link:../tools
@@ -313,9 +307,6 @@ importers:
 
   packages/tools:
     dependencies:
-      '@fusorb/intel-graph':
-        specifier: workspace:*
-        version: link:../graph
       '@fusorb/intel-retrieval':
         specifier: workspace:*
         version: link:../retrieval
